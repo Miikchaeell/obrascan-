@@ -27,6 +27,18 @@ const pool = new Pool({
   ssl: isProduction ? { rejectUnauthorized: false } : false
 });
 
+// Auto-initialize DB tables on startup
+const initDB = async () => {
+  try {
+    const schema = fs.readFileSync(path.join(__dirname, 'init.sql'), 'utf8');
+    await pool.query(schema);
+    console.log('✅ Base de datos inicializada o verificada (Tablas creadas).');
+  } catch (err) {
+    console.error('❌ Error inicializando BD:', err);
+  }
+};
+initDB();
+
 const app = express();
 const port = process.env.PORT || 4000;
 
@@ -190,13 +202,14 @@ app.post('/api/auth/login', async (req, res) => {
     
     res.cookie('token', token, {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
+      secure: true,
+      sameSite: 'none',
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
     res.json({ success: true, user: { id: user.id, email: user.email, role: user.role } });
   } catch (error) {
+    console.error("Login Error:", error);
     res.status(500).json({ error: 'Error de servidor' });
   }
 });

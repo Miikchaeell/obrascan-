@@ -1,4 +1,5 @@
 -- Database Initialization Script
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Users Table
 CREATE TABLE IF NOT EXISTS users (
