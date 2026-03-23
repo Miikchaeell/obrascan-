@@ -178,7 +178,7 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (error) {
     console.error("Register Error:", error);
-    res.status(500).json({ error: 'Email ya registrado o error de BD' });
+    res.status(500).json({ error: 'Email ya registrado o error de BD', details: error.message });
   }
 });
 
