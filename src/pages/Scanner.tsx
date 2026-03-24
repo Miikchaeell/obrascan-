@@ -124,11 +124,11 @@ export default function Scanner() {
       }
 
       const authHeaderValue = `Bearer ${token}`;
-      console.log("AUTH HEADER FRONT:", authHeaderValue);
+      console.log("AUTH HEADER FRONT REAL:", authHeaderValue);
 
-      // PRUEBA TEMPORAL DE HEADERS
+      // 1. PRUEBA LIMPIA POST A /api/auth-header-test
       try {
-        console.log("EJECUTANDO PRUEBA DE HEADERS...");
+        console.log("EJECUTANDO PRUEBA DE HEADERS (SIN FORMDATA)...");
         const testRes = await fetch(`${API_URL}/api/auth-header-test`, {
           method: 'POST',
           headers: { 
@@ -138,12 +138,13 @@ export default function Scanner() {
           credentials: 'include'
         });
         const testData = await testRes.json();
-        console.log("RESULTADO TEST HEADERS:", testData);
+        console.log("RESULTADO TEST HEADERS:", testData.receivedAuthorization);
       } catch (testErr) {
         console.error("ERROR EN TEST HEADERS:", testErr);
       }
 
-      console.log("EJECUTANDO FETCH ANALYZE REAL...");
+      // 2. FLUJO REAL POST /api/analyze
+      console.log("EJECUTANDO FETCH ANALYZE REAL (CON FORMDATA)...");
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
         headers: {
