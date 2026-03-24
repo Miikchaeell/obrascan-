@@ -108,7 +108,12 @@ app.use(express.json());
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
+  console.log("--- DEBUG NETWORK ---");
+  console.log("METHOD:", req.method);
+  console.log("ORIGIN:", req.headers.origin);
   console.log("AUTH HEADER BACKEND FINAL:", req.headers.authorization);
+  console.log("AC REQUEST HEADERS:", req.headers['access-control-request-headers']);
+  console.log("----------------------");
 
   const authHeader = req.headers['authorization'];
   let token = null;
@@ -308,6 +313,17 @@ app.post('/api/stripe/create-checkout', authenticateToken, async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// TEST ENDPOINT
+app.post('/api/auth-header-test', (req, res) => {
+  console.log("TEST ENDPOINT CALLED");
+  console.log("TEST AUTH HEADER:", req.headers.authorization);
+  res.json({
+    receivedAuthorization: req.headers.authorization || null,
+    origin: req.headers.origin || null,
+    method: req.method
+  });
 });
 
 // ANALYZE ENDPOINT

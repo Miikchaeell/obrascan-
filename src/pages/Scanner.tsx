@@ -113,6 +113,7 @@ export default function Scanner() {
 
       const API_URL = import.meta.env.VITE_API_URL || "";
       const token = localStorage.getItem("token");
+      
       console.log("TOKEN ANTES DE ANALYZE:", token);
 
       if (!token || token === "null" || token === "undefined") {
@@ -122,12 +123,31 @@ export default function Scanner() {
         return;
       }
 
-      console.log("AUTH HEADER:", `Bearer ${token}`);
+      const authHeaderValue = `Bearer ${token}`;
+      console.log("AUTH HEADER FRONT:", authHeaderValue);
 
+      // PRUEBA TEMPORAL DE HEADERS
+      try {
+        console.log("EJECUTANDO PRUEBA DE HEADERS...");
+        const testRes = await fetch(`${API_URL}/api/auth-header-test`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': authHeaderValue 
+          },
+          credentials: 'include'
+        });
+        const testData = await testRes.json();
+        console.log("RESULTADO TEST HEADERS:", testData);
+      } catch (testErr) {
+        console.error("ERROR EN TEST HEADERS:", testErr);
+      }
+
+      console.log("EJECUTANDO FETCH ANALYZE REAL...");
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
         headers: {
-          "Authorization": `Bearer ${token}`
+          "Authorization": authHeaderValue
         },
         credentials: 'include',
         body: formData,
