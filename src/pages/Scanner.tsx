@@ -113,6 +113,10 @@ export default function Scanner() {
 
       const API_URL = import.meta.env.VITE_API_URL || "";
       const token = localStorage.getItem("token");
+      console.log("====== FRONTEND DEBUG ======");
+      console.log("Token from localStorage exists?", !!token);
+      console.log("Token starts with:", token ? token.substring(0, 15) + "..." : "null");
+      
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
         headers: { "Authorization": `Bearer ${token}` },

@@ -62,7 +62,8 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:5555'
   ],
-  methods: ['GET', 'POST', 'DELETE', 'PUT'],
+  methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
@@ -104,12 +105,25 @@ app.use(express.json());
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
+  console.log("=== AUTH DEBUG ===");
+  console.log("Path:", req.path);
+  console.log("Authorization Header:", req.headers['authorization']);
+  console.log("Cookies Token:", req.cookies ? !!req.cookies.token : false);
+
   const authHeader = req.headers['authorization'];
   const token = (authHeader && authHeader.split(' ')[1]) || req.cookies.token;
-  if (!token) return res.status(401).json({ error: 'No autenticado' });
+  
+  if (!token) {
+    console.log("Result: NO TOKEN FOUND");
+    return res.status(401).json({ error: 'No autenticado' });
+  }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Sesión expirada' });
+    if (err) {
+      console.log("Result: JWT VERIFY FAILED -", err.message);
+      return res.status(403).json({ error: 'Sesión expirada' });
+    }
+    console.log("Result: SUCCESS for", user.email);
     
     // Check if user is active (Private Beta)
     if (user.is_active === false && user.role !== 'admin' && user.role !== 'superadmin') {
