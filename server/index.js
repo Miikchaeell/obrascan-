@@ -55,20 +55,20 @@ app.get('/', (req, res) => res.send('ObraGo Backend Live'));
 app.get('/api/health', (req, res) => res.json({ status: 'ok', environment: process.env.NODE_ENV }));
 
 // Proper CORS for production
-const corsOptions = {
+app.use(cors({
   origin: [
-    "https://obrascan.vercel.app", 
-    "https://obrago.vercel.app",
-    "http://localhost:5555"
+    'https://obrascan.vercel.app',
+    'http://localhost:3000'
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-  optionsSuccessStatus: 200 // Some legacy browsers crash on 204
-};
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization'
+  ],
+  credentials: true
+}));
 
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Preflight robusto con las mismas opciones
+app.options('*', cors());
 
 app.set('trust proxy', 1);
 app.use(cookieParser());
@@ -108,12 +108,7 @@ app.use(express.json());
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
-  console.log("--- DEBUG NETWORK ---");
-  console.log("METHOD:", req.method);
-  console.log("ORIGIN:", req.headers.origin);
-  console.log("AUTH HEADER BACKEND FINAL:", req.headers.authorization);
-  console.log("AC REQUEST HEADERS:", req.headers['access-control-request-headers']);
-  console.log("----------------------");
+  console.log("AUTH HEADER FINAL BACKEND:", req.headers.authorization);
 
   const authHeader = req.headers['authorization'];
   let token = null;
@@ -331,6 +326,7 @@ app.post('/api/auth-header-test', (req, res) => {
 
 // ANALYZE ENDPOINT
 app.post('/api/analyze', authenticateToken, checkUsageLimit, upload.single('image'), async (req, res) => {
+  console.log('AUTH HEADER FINAL BACKEND (Controller):', req.headers.authorization);
   try {
     if (!req.file) return res.status(400).json({ error: 'No se envió ninguna imagen.' });
 
