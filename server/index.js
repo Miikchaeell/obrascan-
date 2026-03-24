@@ -104,7 +104,8 @@ app.use(express.json());
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
-  const token = req.cookies.token;
+  const authHeader = req.headers['authorization'];
+  const token = (authHeader && authHeader.split(' ')[1]) || req.cookies.token;
   if (!token) return res.status(401).json({ error: 'No autenticado' });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
@@ -216,7 +217,7 @@ app.post('/api/auth/login', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
-    res.json({ success: true, user: { id: user.id, email: user.email, role: user.role } });
+    res.json({ success: true, token, user: { id: user.id, email: user.email, role: user.role } });
   } catch (error) {
     console.error("LOGIN ERROR:", error);
     res.status(500).json({ error: error.message });

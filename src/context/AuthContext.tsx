@@ -23,8 +23,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = async () => {
     try {
+      const token = localStorage.getItem("token");
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const res = await fetch(`${API_URL}/api/auth/me`, { credentials: "include" });
+      const res = await fetch(`${API_URL}/api/auth/me`, {
+        headers: { "Authorization": `Bearer ${token}` },
+        credentials: "include"
+      });
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
@@ -50,8 +54,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    const token = localStorage.getItem("token");
     const API_URL = import.meta.env.VITE_API_URL || "";
-    await fetch(`${API_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    await fetch(`${API_URL}/api/auth/logout`, { 
+      method: 'POST', 
+      headers: { "Authorization": `Bearer ${token}` },
+      credentials: 'include' 
+    });
+    localStorage.removeItem("token");
     setUser(null);
     setPlan('free');
   };

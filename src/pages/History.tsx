@@ -25,8 +25,12 @@ export default function History() {
   const fetchProjects = async () => {
     setIsLoading(true);
     try {
+      const token = localStorage.getItem("token");
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const res = await fetch(`${API_URL}/api/projects`, { credentials: "include" });
+      const res = await fetch(`${API_URL}/api/projects`, { 
+        headers: { "Authorization": `Bearer ${token}` },
+        credentials: "include" 
+      });
       if (res.ok) {
         const data = await res.json();
         setProjects(data.projects || []);
@@ -45,8 +49,13 @@ export default function History() {
   const handleDelete = async (id: number) => {
     if (!confirm("¿Eliminar este proyecto?")) return;
     try {
+      const token = localStorage.getItem("token");
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const res = await fetch(`${API_URL}/api/projects/${id}`, { method: 'DELETE', credentials: 'include' });
+      const res = await fetch(`${API_URL}/api/projects/${id}`, { 
+        method: 'DELETE', 
+        headers: { "Authorization": `Bearer ${token}` },
+        credentials: 'include' 
+      });
       if (res.ok) fetchProjects();
     } catch (error) {
       alert("Error al eliminar");
