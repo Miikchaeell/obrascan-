@@ -54,7 +54,7 @@ const port = process.env.PORT || 4000;
 app.get('/', (req, res) => res.send('ObraGo Backend Live'));
 app.get('/api/health', (req, res) => res.json({ status: 'ok', environment: process.env.NODE_ENV }));
 
-// Proper CORS for production
+// Proper CORS for production - handles preflight automatically
 app.use(cors({
   origin: [
     'https://obrascan.vercel.app',
@@ -67,8 +67,6 @@ app.use(cors({
   ],
   credentials: true
 }));
-
-app.options('*', cors());
 
 app.set('trust proxy', 1);
 app.use(cookieParser());
