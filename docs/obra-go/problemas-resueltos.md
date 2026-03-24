@@ -23,3 +23,6 @@
 ## 6. Crash Stripe (Faltan variables Env)
 **Causa:** El backend inicializaba `new Stripe(null)` por falta de secreto.
 **Solución:** Manejo fallback `'sk_test_dummy'` añadido o inyección garantizada en Render Enviroment.
+## 7. Persistencia del Token (v6)
+**Causa:** El token podía no persistirse correctamente en `localStorage` antes de la navegación o ser manipulado como string "null" por el estado de React.
+**Solución:** Se implementó verificación estricta en `Login.tsx` (bloqueo de navegación si `!savedToken`) y se añadió indicador visual `TOKEN PRESENTE: SI/NO` en la UI del Scanner para diagnóstico directo.
