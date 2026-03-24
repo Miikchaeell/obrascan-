@@ -113,19 +113,21 @@ export default function Scanner() {
 
       const API_URL = import.meta.env.VITE_API_URL || "";
       const token = localStorage.getItem("token");
-      console.log("TOKEN FINAL SCANNER:", token);
+      console.log("TOKEN ANTES DE ANALYZE:", token);
 
       if (!token || token === "null" || token === "undefined") {
-        console.error("TOKEN INVALIDO - NO ENVIAR REQUEST");
+        alert("TOKEN INVALIDO FRONT");
         setIsAnalyzing(false);
+        setStep('upload');
         return;
       }
+
+      console.log("AUTH HEADER:", `Bearer ${token}`);
 
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
         headers: {
           "Authorization": `Bearer ${token}`
-          // Omitimos "Content-Type": "application/json" para que el navegador autogenere el boundary del FormData
         },
         credentials: 'include',
         body: formData,

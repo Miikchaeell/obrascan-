@@ -105,7 +105,7 @@ app.use(express.json());
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
-  console.log("AUTH HEADER BACKEND FINAL:", req.headers.authorization);
+  console.log("AUTH HEADER BACKEND:", req.headers.authorization);
 
   const authHeader = req.headers['authorization'];
   let token = null;
@@ -132,7 +132,7 @@ const authenticateToken = (req, res, next) => {
   
   if (!token) {
     console.log("5. Veredicto Final: NO HAY TOKEN VÁLIDO. Rebotando con 401.");
-    return res.status(401).json({ error: 'AUTH DEBUG V5' });
+    return res.status(401).json({ error: 'TOKEN NO RECIBIDO' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
