@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: obrascan-backend
+    name: obrascan-backend-v3
     env: node
     plan: free
     buildCommand: npm install

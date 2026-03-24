@@ -53,7 +53,11 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 app.get('/', (req, res) => res.send('ObraGo Backend Live'));
-app.get('/api/health', (req, res) => res.json({ status: 'ok', environment: process.env.NODE_ENV }));
+app.get('/api/health', (req, res) => res.json({ 
+  status: 'ok', 
+  version: 'v7.8-definitive',
+  environment: process.env.NODE_ENV || 'development'
+}));
 
 // Proper CORS for production - handles preflight automatically
 const allowedOrigins = [
