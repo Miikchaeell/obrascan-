@@ -113,11 +113,20 @@ export default function Scanner() {
 
       const API_URL = import.meta.env.VITE_API_URL || "";
       const token = localStorage.getItem("token");
-      console.log('FRONTEND DEBUG TOKEN', token);
-      
+      console.log("TOKEN FINAL SCANNER:", token);
+
+      if (!token || token === "null" || token === "undefined") {
+        console.error("TOKEN INVALIDO - NO ENVIAR REQUEST");
+        setIsAnalyzing(false);
+        return;
+      }
+
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
-        headers: { "Authorization": `Bearer ${token}` },
+        headers: {
+          "Authorization": `Bearer ${token}`
+          // Omitimos "Content-Type": "application/json" para que el navegador autogenere el boundary del FormData
+        },
         credentials: 'include',
         body: formData,
       });
@@ -126,8 +135,19 @@ export default function Scanner() {
       
       if (!response.ok) {
         if (response.status === 403) {
-          setShowUpgradeModal(true);
-          setStep('upload');
+          const errMsg = (data.error || data.message || "").toLowerCase();
+          const isPlanError = errMsg.includes("límite alcanzado") || 
+                              errMsg.includes("plan requerido") || 
+                              errMsg.includes("upgrade required");
+
+          if (isPlanError) {
+            setShowUpgradeModal(true);
+            setStep('upload');
+          } else {
+            // Error de Autorización/Autenticación (e.g. JWT expirado, inactivo)
+            alert(`Error de Acceso: ${data.error || "Sesión expirada"}`);
+            setStep('upload');
+          }
         } else {
           throw new Error(data.error || 'Error en el análisis');
         }
@@ -215,14 +235,16 @@ export default function Scanner() {
       };
       
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const token = localStorage.getItem("token");
+      const rawToken = localStorage.getItem("token");
+      const token = rawToken && rawToken !== 'null' && rawToken !== 'undefined' ? rawToken : null;
+      
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${API_URL}/api/projects`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
+        headers,
         body: JSON.stringify({ projectData })
       });
       if (res.ok) {
