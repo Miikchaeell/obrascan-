@@ -154,9 +154,15 @@ export default function Scanner() {
         body: formData,
       });
 
-      const data = await response.json();
+      let data: any = {};
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error("NO SE PUDO PARSEAR JSON:", e);
+      }
       
       if (!response.ok) {
+        console.error("ERROR EN RESPONSE /api/analyze:", response.status, data);
         if (response.status === 403) {
           const errMsg = (data.error || data.message || "").toLowerCase();
           const isPlanError = errMsg.includes("límite alcanzado") || 

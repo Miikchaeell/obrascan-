@@ -55,20 +55,20 @@ app.get('/', (req, res) => res.send('ObraGo Backend Live'));
 app.get('/api/health', (req, res) => res.json({ status: 'ok', environment: process.env.NODE_ENV }));
 
 // Proper CORS for production
-app.options('*', cors());
-app.use(cors({
+const corsOptions = {
   origin: [
-    "https://obrascan.vercel.app", // Ensure this matches Vercel production domain
+    "https://obrascan.vercel.app", 
     "https://obrago.vercel.app",
     "http://localhost:5555"
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization"
-  ],
-  credentials: true
-}));
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+  optionsSuccessStatus: 200 // Some legacy browsers crash on 204
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Preflight robusto con las mismas opciones
 
 app.set('trust proxy', 1);
 app.use(cookieParser());
