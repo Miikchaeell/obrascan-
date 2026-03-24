@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
+console.log("SERVER STARTING...");
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
@@ -441,7 +442,8 @@ app.delete('/api/projects/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Production server strictly listening on 0.0.0.0:${port}`);
+console.log("PORT:", process.env.PORT || 4000);
+app.listen(process.env.PORT || 4000, '0.0.0.0', () => {
+  console.log(`Production server strictly listening on 0.0.0.0:${process.env.PORT || 4000}`);
 });
 
