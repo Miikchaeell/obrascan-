@@ -18,7 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isProduction = process.env.NODE_ENV === 'production';
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
 const JWT_SECRET = process.env.JWT_SECRET || 'obra-super-secret-key';
 
 // DB Pool Configuration
@@ -108,7 +108,19 @@ const authenticateToken = (req, res, next) => {
   console.log('AUTH DEBUG HEADER', req.headers.authorization);
 
   const authHeader = req.headers['authorization'];
-  const token = (authHeader && authHeader.split(' ')[1]) || (req.cookies && req.cookies.token);
+  let token = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const extracted = authHeader.split(' ')[1];
+    if (extracted !== 'null' && extracted !== 'undefined' && extracted !== '') {
+      token = extracted;
+    }
+  }
+
+  // Fallback to cookie
+  if (!token && req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
   
   if (!token) {
     console.log("Result: NO TOKEN FOUND");
