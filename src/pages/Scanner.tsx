@@ -114,6 +114,7 @@ export default function Scanner() {
       const API_URL = import.meta.env.VITE_API_URL || "";
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       });
 
@@ -212,6 +213,7 @@ export default function Scanner() {
       const API_URL = import.meta.env.VITE_API_URL || "";
       const res = await fetch(`${API_URL}/api/projects`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectData })
       });

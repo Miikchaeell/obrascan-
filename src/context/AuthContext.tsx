@@ -24,7 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkAuth = async () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const res = await fetch(`${API_URL}/api/auth/me`);
+      const res = await fetch(`${API_URL}/api/auth/me`, { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     const API_URL = import.meta.env.VITE_API_URL || "";
-    await fetch(`${API_URL}/api/auth/logout`, { method: 'POST' });
+    await fetch(`${API_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
     setUser(null);
     setPlan('free');
   };

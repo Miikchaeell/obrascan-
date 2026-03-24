@@ -26,7 +26,7 @@ export default function History() {
     setIsLoading(true);
     try {
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const res = await fetch(`${API_URL}/api/projects`);
+      const res = await fetch(`${API_URL}/api/projects`, { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         setProjects(data.projects || []);
@@ -46,7 +46,7 @@ export default function History() {
     if (!confirm("¿Eliminar este proyecto?")) return;
     try {
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const res = await fetch(`${API_URL}/api/projects/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/api/projects/${id}`, { method: 'DELETE', credentials: 'include' });
       if (res.ok) fetchProjects();
     } catch (error) {
       alert("Error al eliminar");

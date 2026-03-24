@@ -22,6 +22,7 @@ export default function Login() {
       const API_URL = import.meta.env.VITE_API_URL || "";
       const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
@@ -29,7 +30,7 @@ export default function Login() {
       const data = await res.json();
       if (res.ok) {
         // We'll need another call to get the plan or include it in login response
-        const meRes = await fetch(`${API_URL}/api/auth/me`);
+        const meRes = await fetch(`${API_URL}/api/auth/me`, { credentials: "include" });
         const meData = await meRes.json();
         login(data.user, meData.plan);
         navigate("/");
