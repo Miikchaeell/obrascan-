@@ -105,13 +105,10 @@ app.use(express.json());
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
-  console.log("=== AUTH DEBUG ===");
-  console.log("Path:", req.path);
-  console.log("Authorization Header:", req.headers['authorization']);
-  console.log("Cookies Token:", req.cookies ? !!req.cookies.token : false);
+  console.log('AUTH DEBUG HEADER', req.headers.authorization);
 
   const authHeader = req.headers['authorization'];
-  const token = (authHeader && authHeader.split(' ')[1]) || req.cookies.token;
+  const token = (authHeader && authHeader.split(' ')[1]) || (req.cookies && req.cookies.token);
   
   if (!token) {
     console.log("Result: NO TOKEN FOUND");

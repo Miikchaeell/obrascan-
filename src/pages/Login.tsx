@@ -29,7 +29,10 @@ export default function Login() {
 
       const data = await res.json();
       if (res.ok) {
-        if (data.token) localStorage.setItem("token", data.token);
+        if (data.token) {
+          localStorage.setItem("token", data.token);
+          console.log("LOGIN SAVED TOKEN:", localStorage.getItem("token"));
+        }
         // We'll need another call to get the plan or include it in login response
         const meRes = await fetch(`${API_URL}/api/auth/me`, { 
           headers: { "Authorization": `Bearer ${data.token}` },
