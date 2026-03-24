@@ -275,7 +275,8 @@ export default function Scanner() {
         </Button>
         <div className="text-center">
           <h1 className="text-sm font-black uppercase tracking-widest text-foreground">ObraGo</h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase">{plan === 'free' ? 'Plan Gratis' : `Plan ${plan}`}</p>
+          <p className="text-[10px] font-bold text-primary uppercase">BUILD: auth-fix-v5</p>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase">{!plan || plan === 'free' ? 'Plan Gratis' : `Plan ${plan}`}</p>
         </div>
         <div className="flex gap-2">
           {plan === 'free' && <Button size="sm" variant="ghost" className="text-primary p-0" onClick={() => navigate("/pricing")}><Crown className="w-5 h-5" /></Button>}

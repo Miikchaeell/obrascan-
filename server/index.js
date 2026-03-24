@@ -105,34 +105,42 @@ app.use(express.json());
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
-  console.log('AUTH DEBUG HEADER', req.headers.authorization);
+  console.log("AUTH HEADER BACKEND FINAL:", req.headers.authorization);
 
   const authHeader = req.headers['authorization'];
   let token = null;
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const extracted = authHeader.split(' ')[1];
-    if (extracted !== 'null' && extracted !== 'undefined' && extracted !== '') {
+    if (extracted && extracted !== 'null' && extracted !== 'undefined' && extracted !== '') {
       token = extracted;
+      console.log('3. Token extraído del Header correctamente.');
+    } else {
+      console.log('3. Header Bearer presente, pero el token era null/vacio/undefined.');
     }
+  } else {
+    console.log('3. No se detectó Header Authorization o no inicia con Bearer.');
   }
 
   // Fallback to cookie
   if (!token && req.cookies && req.cookies.token) {
     token = req.cookies.token;
+    console.log('4. Fallback a Cookie: Se logró extraer token de cookie.');
+  } else if (!token) {
+    console.log('4. Fallback a Cookie: No hay token en req.cookies.');
   }
   
   if (!token) {
-    console.log("Result: NO TOKEN FOUND");
-    return res.status(401).json({ error: 'No autenticado' });
+    console.log("5. Veredicto Final: NO HAY TOKEN VÁLIDO. Rebotando con 401.");
+    return res.status(401).json({ error: 'AUTH DEBUG V5' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      console.log("Result: JWT VERIFY FAILED -", err.message);
+      console.log("5. Veredicto Final: TOKEN INVÁLIDO O EXPIRADO ->", err.message);
       return res.status(403).json({ error: 'Sesión expirada' });
     }
-    console.log("Result: SUCCESS for", user.email);
+    console.log("5. Veredicto Final: AUTENTICACIÓN EXITOSA para ->", user.email);
     
     // Check if user is active (Private Beta)
     if (user.is_active === false && user.role !== 'admin' && user.role !== 'superadmin') {
@@ -240,7 +248,9 @@ app.post('/api/auth/login', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
-    res.json({ success: true, token, user: { id: user.id, email: user.email, role: user.role } });
+    const responsePayload = { success: true, token, user: { id: user.id, email: user.email, role: user.role } };
+    console.log("LOGIN RESPONSE BACKEND:", responsePayload);
+    res.json(responsePayload);
   } catch (error) {
     console.error("LOGIN ERROR:", error);
     res.status(500).json({ error: error.message });

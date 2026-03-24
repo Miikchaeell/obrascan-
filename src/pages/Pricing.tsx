@@ -62,15 +62,17 @@ export default function Pricing() {
 
     setLoadingPlan(planType);
     try {
-      const token = localStorage.getItem("token");
+      const rawToken = localStorage.getItem("token");
+      const token = rawToken && rawToken !== 'null' && rawToken !== 'undefined' ? rawToken : null;
+      
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const API_URL = import.meta.env.VITE_API_URL || "";
       const res = await fetch(`${API_URL}/api/stripe/create-checkout`, {
         method: "POST",
         credentials: "include",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` 
-        },
+        headers,
         body: JSON.stringify({ planType, priceId }),
       });
       const data = await res.json();

@@ -23,16 +23,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const rawToken = localStorage.getItem("token");
+      const token = rawToken && rawToken !== 'null' && rawToken !== 'undefined' ? rawToken : null;
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const API_URL = import.meta.env.VITE_API_URL || "";
       const res = await fetch(`${API_URL}/api/auth/me`, {
-        headers: { "Authorization": `Bearer ${token}` },
+        headers,
         credentials: "include"
       });
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
-        setPlan(data.plan);
+        setPlan(data.plan || 'free');
       } else {
         setUser(null);
         setPlan('free');
