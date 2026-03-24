@@ -241,6 +241,8 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '7d' }
     );
     
+    console.log("LOGIN RESPONSE BACKEND TOKEN EXISTS:", !!token);
+
     res.cookie('token', token, {
       httpOnly: true,
       secure: true,

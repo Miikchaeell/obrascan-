@@ -277,7 +277,10 @@ export default function Scanner() {
         </Button>
         <div className="text-center">
           <h1 className="text-sm font-black uppercase tracking-widest text-foreground">ObraGo</h1>
-          <p className="text-[10px] font-bold text-primary uppercase">BUILD: auth-fix-v5</p>
+          <p className="text-[10px] font-bold text-primary uppercase">BUILD: auth-fix-v6</p>
+          <p className={`text-[10px] font-bold uppercase ${localStorage.getItem("token") ? "text-green-500" : "text-red-500"}`}>
+            TOKEN PRESENTE: {localStorage.getItem("token") ? "SI" : "NO"}
+          </p>
           <p className="text-[10px] font-bold text-muted-foreground uppercase">{!plan || plan === 'free' ? 'Plan Gratis' : `Plan ${plan}`}</p>
         </div>
         <div className="flex gap-2">

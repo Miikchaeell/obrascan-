@@ -32,10 +32,18 @@ export default function Login() {
       
       if (res.ok) {
         if (!data.token) {
-          throw new Error("TOKEN NO RECIBIDO DEL SERVIDOR");
+          throw new Error("TOKEN NO RECIBIDO DEL SERVIDOR EN JSON");
         }
+        
         localStorage.setItem("token", data.token);
-        console.log("TOKEN GUARDADO:", data.token);
+        const savedToken = localStorage.getItem("token");
+        console.log("TOKEN GUARDADO POST-LOGIN:", savedToken);
+
+        if (!savedToken) {
+          setError("LOGIN OK PERO TOKEN NO PERSISTIDO");
+          return;
+        }
+
         // We'll need another call to get the plan or include it in login response
         const meRes = await fetch(`${API_URL}/api/auth/me`, { 
           headers: { "Authorization": `Bearer ${data.token}` },
