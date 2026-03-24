@@ -32,6 +32,15 @@ const initDB = async () => {
   try {
     const schema = fs.readFileSync(path.join(__dirname, 'init.sql'), 'utf8');
     await pool.query(schema);
+    
+    // Run migrations safely
+    const migrationPath = path.join(__dirname, 'migrations', '001_make_superadmin.sql');
+    if (fs.existsSync(migrationPath)) {
+      const migration = fs.readFileSync(migrationPath, 'utf8');
+      await pool.query(migration);
+      console.log('✅ Migraciones aplicadas correctamente.');
+    }
+
     console.log('✅ Base de datos inicializada o verificada (Tablas creadas).');
   } catch (err) {
     console.error('❌ Error inicializando BD:', err);
@@ -102,7 +111,7 @@ const authenticateToken = (req, res, next) => {
     if (err) return res.status(403).json({ error: 'Sesión expirada' });
     
     // Check if user is active (Private Beta)
-    if (user.is_active === false && user.role !== 'admin') {
+    if (user.is_active === false && user.role !== 'admin' && user.role !== 'superadmin') {
        return res.status(403).json({ error: 'Cuenta pendiente de aprobación (Beta Privada)' });
     }
 
@@ -112,7 +121,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
+  if (req.user && (req.user.role === 'admin' || req.user.role === 'superadmin')) {
     next();
   } else {
     res.status(403).json({ error: 'Acceso denegado: Se requiere ser Administrador' });
