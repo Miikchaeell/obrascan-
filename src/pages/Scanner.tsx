@@ -114,7 +114,7 @@ export default function Scanner() {
       const API_URL = import.meta.env.VITE_API_URL || "";
       const token = localStorage.getItem("token");
       
-      console.log("TOKEN ANTES DE ANALYZE:", token);
+      console.log("TOKEN USADO EN ANALYZE:", token);
 
       if (!token || token === "null" || token === "undefined") {
         alert("TOKEN INVALIDO FRONT");
@@ -123,17 +123,13 @@ export default function Scanner() {
         return;
       }
 
-      const authHeaderValue = `Bearer ${token}`;
-      console.log("AUTH HEADER FRONT REAL:", authHeaderValue);
+      console.log("AUTH HEADER FRONT REAL:", `Bearer ${token}`);
 
-      // 2. FLUJO REAL POST /api/analyze
-      console.log("EJECUTANDO FETCH ANALYZE REAL (CON FORMDATA)...");
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
         headers: {
-          "Authorization": authHeaderValue
+          "Authorization": `Bearer ${token}`
         },
-        credentials: 'include',
         body: formData,
       });
 
