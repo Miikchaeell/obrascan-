@@ -24,6 +24,7 @@ export default function History() {
 
   const fetchProjects = async () => {
     setIsLoading(true);
+    console.log("HISTORY FETCH START: /api/projects");
     try {
       const token = localStorage.getItem("token");
       const API_URL = import.meta.env.VITE_API_URL || "";
@@ -31,12 +32,18 @@ export default function History() {
         headers: { "Authorization": `Bearer ${token}` },
         credentials: "include" 
       });
+      console.log("HISTORY FETCH STATUS:", res.status);
+      
       if (res.ok) {
         const data = await res.json();
+        console.log("HISTORY FETCH BODY:", data);
         setProjects(data.projects || []);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("HISTORY FETCH FAILED:", res.status, errorData);
       }
     } catch (error) {
-      console.error("Error fetching projects:", error);
+      console.error("HISTORY CRITICAL ERROR:", error);
     } finally {
       setIsLoading(false);
     }

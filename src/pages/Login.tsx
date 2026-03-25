@@ -28,10 +28,13 @@ export default function Login() {
       });
 
       const data = await res.json();
-      console.log("LOGIN RESPONSE:", data);
+      console.log("LOGIN RESPONSE STATUS:", res.status);
+      console.log("LOGIN RESPONSE BODY:", data);
       
       if (res.ok) {
+        console.log("LOGIN OK");
         if (!data.token) {
+          console.error("TOKEN NO RECIBIDO DEL SERVIDOR EN JSON");
           throw new Error("TOKEN NO RECIBIDO DEL SERVIDOR EN JSON");
         }
         
@@ -40,18 +43,35 @@ export default function Login() {
         console.log("TOKEN GUARDADO POST-LOGIN:", savedToken);
 
         if (!savedToken) {
+          console.error("LOGIN OK PERO TOKEN NO PERSISTIDO");
           setError("LOGIN OK PERO TOKEN NO PERSISTIDO");
           return;
         }
 
-        // We'll need another call to get the plan or include it in login response
-        const meRes = await fetch(`${API_URL}/api/auth/me`, { 
-          headers: { "Authorization": `Bearer ${data.token}` },
-          credentials: "include" 
-        });
-        const meData = await meRes.json();
-        login(data.user, meData.plan);
-        navigate("/");
+        console.log("POST LOGIN FETCH START");
+        console.log(`POST LOGIN FETCH URL: ${API_URL}/api/auth/me`);
+        
+        try {
+          const meRes = await fetch(`${API_URL}/api/auth/me`, { 
+            headers: { "Authorization": `Bearer ${data.token}` },
+            credentials: "include" 
+          });
+          
+          console.log("POST LOGIN FETCH STATUS:", meRes.status);
+          const meData = await meRes.json();
+          console.log("POST LOGIN FETCH BODY:", meData);
+
+          if (!meRes.ok) {
+            setError(`Error en post-login: ${meData.error || 'No se pudo obtener el perfil'}`);
+            return;
+          }
+
+          login(data.user, meData.plan);
+          navigate("/");
+        } catch (meErr: any) {
+          console.error("POST LOGIN FETCH FAILED:", meErr);
+          setError(`Fallo crítico post-login: ${meErr.message || "Error de red"}`);
+        }
       } else {
         setError(data.error || "Error al iniciar sesión");
       }

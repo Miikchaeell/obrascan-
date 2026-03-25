@@ -128,6 +128,7 @@ export default function Scanner() {
 
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Authorization': `Bearer ${token}`
         },

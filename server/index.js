@@ -69,19 +69,21 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || isProduction === false) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || isProduction === false) {
       callback(null, true);
     } else {
+      console.warn("CORS Blocked for origin:", origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
   optionsSuccessStatus: 200
 }));
+
+// Handle preflight for all routes
+app.options('*', cors());
 
 app.set('trust proxy', 1);
 app.use(cookieParser());
@@ -118,6 +120,25 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 });
 
 app.use(express.json());
+
+// Global Request Logger
+app.use((req, res, next) => {
+  const start = Date.now();
+  const requestId = Math.random().toString(36).substring(7);
+  console.log(`>>> [${requestId}] ${req.method} ${req.url}`);
+  console.log(`REQ HEADERS [${requestId}]:`, {
+    origin: req.headers.origin,
+    auth: req.headers.authorization ? (req.headers.authorization.substring(0, 15) + "...") : "MISSING",
+    contentType: req.headers['content-type']
+  });
+  
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`<<< [${requestId}] ${req.method} ${req.url} - STATUS: ${res.statusCode} (${duration}ms)`);
+  });
+  
+  next();
+});
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {

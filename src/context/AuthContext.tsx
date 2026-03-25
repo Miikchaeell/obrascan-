@@ -35,15 +35,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers,
         credentials: "include"
       });
+      console.log(`CHECKAUTH FETCH STATUS (${API_URL}/api/auth/me):`, res.status);
+      
       if (res.ok) {
         const data = await res.json();
+        console.log("CHECKAUTH FETCH BODY:", data);
         setUser(data.user);
         setPlan(data.plan || 'free');
       } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.warn("CHECKAUTH FETCH FAILED:", res.status, errorData);
         setUser(null);
         setPlan('free');
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("CHECKAUTH CRITICAL ERROR:", error);
       setUser(null);
     } finally {
       setIsLoading(false);
