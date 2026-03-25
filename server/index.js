@@ -112,11 +112,17 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 
 app.use(express.json());
 
-// Global Request Logger
+// Global Request Logger with Header Debugging
 app.use((req, res, next) => {
   const start = Date.now();
   const requestId = Math.random().toString(36).substring(7);
   console.log(`>>> [${requestId}] ${req.method} ${req.url}`);
+  console.log(`[${requestId}] HEADERS:`, {
+    authorization: req.headers.authorization ? (req.headers.authorization.substring(0, 20) + '...') : 'MISSING',
+    origin: req.headers.origin || 'NO ORIGIN',
+    'content-type': req.headers['content-type']
+  });
+  
   res.on('finish', () => {
     const duration = Date.now() - start;
     console.log(`<<< [${requestId}] ${req.method} ${req.url} - STATUS: ${res.statusCode} (${duration}ms)`);
