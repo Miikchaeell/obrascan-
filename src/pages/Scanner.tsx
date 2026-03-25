@@ -115,17 +115,16 @@ export default function Scanner() {
       const API_URL = import.meta.env.VITE_API_URL || "";
       const token = localStorage.getItem("token");
       
+      // Log obligatorio solicitado por el CTO
       console.log("TOKEN ENVIADO:", token);
-      console.log("TOKEN USADO EN ANALYZE:", token);
 
       if (!token || token === "null" || token === "undefined") {
-        alert("TOKEN INVALIDO FRONT");
+        console.error("DETENIENDO EJECUCIÓN: No hay token disponible");
+        alert("Sesión no válida. Por favor, inicia sesión nuevamente.");
         setIsAnalyzing(false);
         setStep('upload');
         return;
       }
-
-      console.log("AUTH HEADER FRONT REAL:", `Bearer ${token}`);
 
       console.log("ANALYZE START");
       const response = await fetch(`${API_URL}/api/analyze`, {
@@ -133,6 +132,7 @@ export default function Scanner() {
         credentials: 'include',
         headers: {
           'Authorization': `Bearer ${token}`
+          // Content-Type NO se incluye para FormData
         },
         body: formData,
       });
@@ -258,16 +258,22 @@ export default function Scanner() {
       };
       
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const rawToken = localStorage.getItem("token");
-      const token = rawToken && rawToken !== 'null' && rawToken !== 'undefined' ? rawToken : null;
+      const token = localStorage.getItem("token");
       
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      console.log("TOKEN ENVIADO (PROJECTS):", token);
+
+      if (!token) {
+        alert("Sesión expirada. No se puede guardar.");
+        return;
+      }
 
       const res = await fetch(`${API_URL}/api/projects`, {
         method: 'POST',
         credentials: 'include',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ projectData })
       });
       if (res.ok) {

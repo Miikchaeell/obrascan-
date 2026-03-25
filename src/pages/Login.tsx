@@ -32,15 +32,18 @@ export default function Login() {
       console.log("LOGIN RESPONSE BODY:", data);
       
       if (res.ok) {
-        console.log("LOGIN OK");
-        if (!data.token) {
-          console.error("TOKEN NO RECIBIDO DEL SERVIDOR EN JSON");
-          throw new Error("TOKEN NO RECIBIDO DEL SERVIDOR EN JSON");
-        }
-        
+        // Solución técnica: Forzar guardado inmediato en LocalStorage
+        console.log("GUARDANDO TOKEN EN LOCALSTORAGE...");
         localStorage.setItem("token", data.token);
+        
         const savedToken = localStorage.getItem("token");
-        console.log("TOKEN GUARDADO POST-LOGIN:", savedToken);
+        console.log("TOKEN VERIFICADO EN STORAGE:", savedToken ? "PRESENT" : "MISSING");
+        
+        if (!savedToken) {
+          console.error("CRÍTICO: El token no se persistió en localStorage");
+          setError("Error interno: No se pudo guardar la sesión");
+          return;
+        }
 
         if (!savedToken) {
           console.error("LOGIN OK PERO TOKEN NO PERSISTIDO");
