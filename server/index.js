@@ -359,15 +359,19 @@ app.post('/api/auth-header-test', (req, res) => {
 
 // ANALYZE ENDPOINT
 app.post('/api/analyze', authenticateToken, checkUsageLimit, upload.single('image'), async (req, res) => {
-  console.log('AUTH HEADER FINAL BACKEND (Controller):', req.headers.authorization);
+  console.log('>>> ANALYZE START - User:', req.user.email);
   try {
-    if (!req.file) return res.status(400).json({ error: 'No se envió ninguna imagen.' });
+    if (!req.file) {
+      console.log('<<< ANALYZE FAIL: No image');
+      return res.status(400).json({ error: 'No se envió ninguna imagen.' });
+    }
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const base64Image = fs.readFileSync(req.file.path).toString('base64');
     const mimeType = req.file.mimetype;
 
     const response = await openai.chat.completions.create({
+      // ... (rest of the payload)
       model: "gpt-4o",
       messages: [
         { role: "system", content: "Expert construction engineer. Extract structure, element, dimensions. Return strict JSON." },
@@ -408,8 +412,10 @@ app.post('/api/analyze', authenticateToken, checkUsageLimit, upload.single('imag
     });
 
     const parsedData = JSON.parse(response.choices[0].message.content);
+    console.log('<<< ANALYZE SUCCESS - Element:', parsedData.elemento);
     res.json({ success: true, data: parsedData, imageUrl: `/uploads/${req.file.filename}` });
   } catch (error) {
+    console.error('<<< ANALYZE ERROR:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

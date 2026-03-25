@@ -94,6 +94,7 @@ export default function Scanner() {
   };
 
   const handleClear = () => {
+    console.log("RESETTING SCANNER STATE");
     setImagePreview(null);
     setHistoryImageUrl(null);
     setSelectedFile(null);
@@ -126,6 +127,7 @@ export default function Scanner() {
 
       console.log("AUTH HEADER FRONT REAL:", `Bearer ${token}`);
 
+      console.log("ANALYZE START");
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
         credentials: 'include',
@@ -135,9 +137,11 @@ export default function Scanner() {
         body: formData,
       });
 
+      console.log("ANALYZE STATUS:", response.status);
       let data: any = {};
       try {
         data = await response.json();
+        console.log("ANALYZE BODY:", data);
       } catch (e) {
         console.error("NO SE PUDO PARSEAR JSON:", e);
       }
@@ -164,6 +168,10 @@ export default function Scanner() {
         return;
       }
 
+      if (!data.data) {
+        throw new Error("Respuesta del servidor no contiene 'data'");
+      }
+
       const backendData = data.data;
       const receivedDims = {
         largo: backendData.dimensiones?.alto_m || 0,
@@ -171,6 +179,10 @@ export default function Scanner() {
         espesor: backendData.dimensiones?.espesor_m || 0
       };
 
+      console.log("SETTING ANALYZE RESULT", backendData);
+      // CTO request: Mostrar JSON crudo temporalmente
+      alert(`ANÁLISIS EXITOSO: ${JSON.stringify(backendData).substring(0, 100)}...`);
+      
       setResult({
         elemento: backendData.elemento || "Desconocido",
         sistema: backendData.sistema_constructivo || "Desconocido",
@@ -184,7 +196,8 @@ export default function Scanner() {
       setHistoryImageUrl(data.imageUrl);
       setStep('confirm');
     } catch (error: any) {
-      alert(error.message);
+      console.error("ANALYZE ERROR:", error);
+      alert(`ERROR EN ANÁLISIS: ${error.message}`);
       setStep('upload');
     } finally {
       setIsAnalyzing(false);
