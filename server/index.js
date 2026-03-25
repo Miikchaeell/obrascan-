@@ -135,7 +135,11 @@ const authenticateToken = (req, res, next) => {
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Sesión expirada' });
+    if (err) {
+      console.error("JWT VERIFY ERROR:", err.name, err.message);
+      console.log("TOKEN RECIBIDO (SUBSTRING):", token.substring(0, 20) + "...");
+      return res.status(403).json({ error: 'Sesión expirada' });
+    }
     if (user.is_active === false && user.role !== 'admin' && user.role !== 'superadmin') {
        return res.status(403).json({ error: 'Cuenta pendiente de aprobación (Beta Privada)' });
     }
