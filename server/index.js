@@ -136,7 +136,9 @@ const authenticateToken = (req, res, next) => {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
+      const decoded = jwt.decode(token);
       console.error("JWT VERIFY ERROR:", err.name, err.message);
+      console.log("PAYLOAD DE TOKEN FALLIDO:", JSON.stringify(decoded));
       console.log("TOKEN RECIBIDO (SUBSTRING):", token.substring(0, 20) + "...");
       return res.status(403).json({ error: 'Sesión expirada' });
     }
