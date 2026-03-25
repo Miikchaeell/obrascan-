@@ -82,8 +82,7 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// Handle preflight for all routes
-app.options('*', cors());
+// The cors middleware above already handles preflight OPTIONS requests.
 
 app.set('trust proxy', 1);
 app.use(cookieParser());
