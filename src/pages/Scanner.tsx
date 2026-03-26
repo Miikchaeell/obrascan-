@@ -115,21 +115,6 @@ export default function Scanner() {
       const API_URL = import.meta.env.VITE_API_URL || "";
       const token = localStorage.getItem("token");
       
-      // Log obligatorio solicitado por el CTO
-      console.log("TOKEN ENVIADO:", token);
-
-      if (!token) {
-        console.error("TOKEN NO DISPONIBLE EN FRONTEND");
-        alert("TOKEN NO DISPONIBLE EN FRONTEND. Por favor, inicia sesión.");
-        setIsAnalyzing(false);
-        setStep('upload');
-        return;
-      }
-
-      console.log("ANALYZE START");
-      console.log("TOKEN PRESENTE:", !!token);
-      console.log("IMAGE SELECTED:", !!selectedFile);
-
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
         credentials: 'include',
@@ -139,21 +124,12 @@ export default function Scanner() {
         body: formData,
       });
 
-      console.log("ANALYZE STATUS:", response.status);
-      
-      const rawText = await response.text();
-      console.log("ANALYZE RAW RESPONSE:", rawText);
-
-      let data: any = {};
-      try {
-        data = JSON.parse(rawText);
-        console.log("ANALYZE PARSED DATA:", data);
-      } catch (e) {
-        console.error("NO SE PUDO PARSEAR JSON:", e);
-        alert(`ERROR DE PARSEO (Raw Body): ${rawText.substring(0, 100)}`);
-      }
-      
       if (!response.ok) {
+        let data: any = {};
+        try {
+          data = await response.json();
+        } catch (e) {}
+        
         console.error("ERROR EN RESPONSE /api/analyze:", response.status, data);
         if (response.status === 403) {
           const errMsg = (data.error || data.message || "").toLowerCase();
@@ -163,15 +139,14 @@ export default function Scanner() {
 
           if (isPlanError) {
             setShowUpgradeModal(true);
-            // setStep('upload'); // COMENTADO POR CTO: No resetear UI
+            setStep('upload');
           } else {
             // Error de Autorización/Autenticación (e.g. JWT expirado, inactivo)
             alert(`Error de Acceso: ${data.error || "Sesión expirada"}`);
-            // setStep('upload'); // COMENTADO POR CTO: No resetear UI
+            setStep('upload');
           }
         } else {
-          // throw new Error(data.error || 'Error en el análisis');
-          alert(`ERROR DE SERVIDOR (${response.status}): ${data.error || 'Error desconocido'}`);
+          throw new Error(data.error || 'Error en el análisis');
         }
         return;
       }
@@ -206,7 +181,7 @@ export default function Scanner() {
     } catch (error: any) {
       console.error("ANALYZE ERROR:", error);
       alert(`ERROR EN ANÁLISIS: ${error.message}`);
-      // setStep('upload'); // COMENTADO POR CTO: No resetear UI
+      setStep('upload');
     } finally {
       setIsAnalyzing(false);
     }
@@ -312,10 +287,6 @@ export default function Scanner() {
         </Button>
         <div className="text-center">
           <h1 className="text-sm font-black uppercase tracking-widest text-foreground">ObraGo</h1>
-          <p className="text-[10px] font-bold text-primary uppercase">BUILD: auth-fix-v6</p>
-          <p className={`text-[10px] font-bold uppercase ${localStorage.getItem("token") ? "text-green-500" : "text-red-500"}`}>
-            TOKEN PRESENTE: {localStorage.getItem("token") ? "SI" : "NO"}
-          </p>
           <p className="text-[10px] font-bold text-muted-foreground uppercase">{!plan || plan === 'free' ? 'Plan Gratis' : `Plan ${plan}`}</p>
         </div>
         <div className="flex gap-2">
