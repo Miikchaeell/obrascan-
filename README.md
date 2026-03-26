@@ -28,7 +28,7 @@ export default defineConfig([
       // Alternatively, use this for stricter rules
       tseslint.configs.strictTypeChecked,
       // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+      tseslint.configs.stylisticTypeChecked,<!-- trigger vercel build -->
 
       // Other configs...
     ],
