@@ -153,26 +153,22 @@ export default function Scanner() {
 
       data = await response.json();
 
-      if (!data.data) {
-        throw new Error("Respuesta del servidor no contiene 'data'");
-      }
-
       const backendData = data.data;
+      
+      // Mapeo robusto: buscar dimensiones en varios formatos posibles del JSON de la IA
       const receivedDims = {
-        largo: backendData.dimensiones?.alto_m || 0,
-        ancho: backendData.dimensiones?.ancho_m || 0,
-        espesor: backendData.dimensiones?.espesor_m || 0
+        largo: Number(backendData.dimensiones?.largo || backendData.dimensiones?.alto_m || 0),
+        ancho: Number(backendData.dimensiones?.ancho || backendData.dimensiones?.ancho_m || 0),
+        espesor: Number(backendData.dimensiones?.espesor || backendData.dimensiones?.espesor_m || 0)
       };
 
-      console.log("SETTING ANALYZE RESULT", backendData);
-      // CTO request: Mostrar JSON crudo temporalmente
-      alert(`ANÁLISIS EXITOSO: ${JSON.stringify(backendData).substring(0, 100)}...`);
+      console.log("Dimesiones recibidas:", receivedDims);
       
       setResult({
-        elemento: backendData.elemento || "Desconocido",
-        sistema: backendData.sistema_constructivo || "Desconocido",
+        elemento: backendData.elemento || backendData.structure || "Estructura Detectada",
+        sistema: backendData.sistema_constructivo || backendData.layout || "Sistema Estándar",
         dimensiones: receivedDims,
-        materiales: backendData.materiales_detectados || [],
+        materiales: backendData.materiales_detectados || backendData.elements || [],
         confianza: "alta",
         observaciones: backendData.observaciones || ""
       });
@@ -190,12 +186,12 @@ export default function Scanner() {
   };
 
   const calculateGeometricData = () => {
-    if (!result) return { area: 0, volume: 0, showVolume: false };
-    const { largo, ancho, espesor } = result.dimensiones;
+    // IMPORTANTE: Usar editedDims para que la UI sea reactiva al cambio manual
+    const { largo, ancho, espesor } = editedDims;
     const area = largo * ancho;
     const volume = area * espesor;
-    const elem = result.elemento.toLowerCase();
-    const showVolume = elem.includes("muro") || elem.includes("radier") || elem.includes("losa") || elem.includes("columna");
+    const elem = (result?.elemento || "").toLowerCase();
+    const showVolume = elem.includes("muro") || elem.includes("radier") || elem.includes("losa") || elem.includes("columna") || elem.includes("viga");
     return { area, volume, showVolume };
   };
 
@@ -222,9 +218,14 @@ export default function Scanner() {
 
   const calculateTotalCost = () => {
     const materials = calculateMaterialQuantities();
-    const matCost = materials.reduce((acc, item) => acc + (parseFloat(item.total.toString()) * (prices[item.id] || 0)), 0);
-    const labor = (calculateGeometricData().area / performance) * (laborPrices.maestro + laborPrices.ayudante);
-    return matCost + labor;
+    const matCost = materials.reduce((acc, item) => {
+      const qty = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
+      return acc + (qty * (prices[item.id] || 0));
+    }, 0);
+    
+    const { area } = calculateGeometricData();
+    const labor = (area / performance) * (laborPrices.maestro + laborPrices.ayudante);
+    return Math.round(matCost + labor);
   };
 
   const handleSaveProject = async () => {
@@ -370,15 +371,20 @@ export default function Scanner() {
               </div>
 
               <div className="grid grid-cols-3 gap-4">
-                {['largo', 'ancho', 'espesor'].map((dim) => (
+                {(['largo', 'ancho', 'espesor'] as const).map((dim) => (
                   <div key={dim} className="space-y-1">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase px-1">{dim}</label>
                     <input 
                       type="number"
+                      step="0.01"
                       disabled={isValidated}
-                      value={editedDims[dim as keyof typeof editedDims]}
-                      onChange={(e) => setEditedDims({...editedDims, [dim]: parseFloat(e.target.value) || 0})}
-                      className="w-full bg-secondary border border-border rounded-xl py-3 px-2 text-center font-bold focus:ring-2 focus:ring-primary outline-none disabled:opacity-50"
+                      value={editedDims[dim] === 0 ? '' : editedDims[dim]}
+                      placeholder="0.00"
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                        setEditedDims(prev => ({ ...prev, [dim]: val }));
+                      }}
+                      className="w-full bg-secondary border border-border rounded-xl py-3 px-2 text-center font-bold focus:ring-2 focus:ring-primary outline-none disabled:opacity-50 transition-all"
                     />
                   </div>
                 ))}
