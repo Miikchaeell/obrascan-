@@ -238,22 +238,32 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 
 // ANALYZE
 app.post('/api/analyze', authenticateToken, checkUsageLimit, upload.single('image'), async (req, res) => {
-  console.log('>>> ANALYZE START - User:', req.user.email);
+  console.log('>>> [API/ANALYZE] REQUEST RECEIVED - User:', req.user.email);
   try {
-    if (!req.file) return res.status(400).json({ error: 'No image' });
+    if (!req.file) {
+      console.warn('>>> [API/ANALYZE] ERROR: No image file in request');
+      return res.status(400).json({ error: 'No image' });
+    }
+    console.log('>>> [API/ANALYZE] FILE RECEIVED:', req.file.filename, 'Size:', req.file.size);
+
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const base64Image = fs.readFileSync(req.file.path).toString('base64');
+    
+    console.log('>>> [API/ANALYZE] SENDING TO OPENAI...');
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "system", content: "Expert construction engineer. Extract structure, element, dimensions. Return strict JSON." },
                  { role: "user", content: [{ type: "text", text: "Analyze this image." }, { type: "image_url", image_url: { url: `data:${req.file.mimetype};base64,${base64Image}` } }] }],
       response_format: { type: "json_object" }
     });
+    
+    console.log('>>> [API/ANALYZE] OPENAI RESPONSE RECEIVED');
     const parsedData = JSON.parse(response.choices[0].message.content);
-    console.log('<<< ANALYZE SUCCESS');
+    
+    console.log('<<< [API/ANALYZE] SUCCESS: Responding with 200 OK');
     res.json({ success: true, data: parsedData, imageUrl: `/uploads/${req.file.filename}` });
   } catch (error) {
-    console.error('<<< ANALYZE ERROR:', error.message);
+    console.error('<<< [API/ANALYZE] FATAL ERROR:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

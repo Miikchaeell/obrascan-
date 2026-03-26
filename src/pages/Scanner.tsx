@@ -127,24 +127,30 @@ export default function Scanner() {
       }
 
       console.log("ANALYZE START");
+      console.log("TOKEN PRESENTE:", !!token);
+      console.log("IMAGE SELECTED:", !!selectedFile);
+
       const response = await fetch(`${API_URL}/api/analyze`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           "Authorization": `Bearer ${token}`
-          // Nota: Content-Type no se fuerza a application/json aquí 
-          // porque el cuerpo es FormData y el navegador debe setear el boundary.
         },
         body: formData,
       });
 
       console.log("ANALYZE STATUS:", response.status);
+      
+      const rawText = await response.text();
+      console.log("ANALYZE RAW RESPONSE:", rawText);
+
       let data: any = {};
       try {
-        data = await response.json();
-        console.log("ANALYZE BODY:", data);
+        data = JSON.parse(rawText);
+        console.log("ANALYZE PARSED DATA:", data);
       } catch (e) {
         console.error("NO SE PUDO PARSEAR JSON:", e);
+        alert(`ERROR DE PARSEO (Raw Body): ${rawText.substring(0, 100)}`);
       }
       
       if (!response.ok) {
@@ -157,14 +163,15 @@ export default function Scanner() {
 
           if (isPlanError) {
             setShowUpgradeModal(true);
-            setStep('upload');
+            // setStep('upload'); // COMENTADO POR CTO: No resetear UI
           } else {
             // Error de Autorización/Autenticación (e.g. JWT expirado, inactivo)
             alert(`Error de Acceso: ${data.error || "Sesión expirada"}`);
-            setStep('upload');
+            // setStep('upload'); // COMENTADO POR CTO: No resetear UI
           }
         } else {
-          throw new Error(data.error || 'Error en el análisis');
+          // throw new Error(data.error || 'Error en el análisis');
+          alert(`ERROR DE SERVIDOR (${response.status}): ${data.error || 'Error desconocido'}`);
         }
         return;
       }
@@ -199,7 +206,7 @@ export default function Scanner() {
     } catch (error: any) {
       console.error("ANALYZE ERROR:", error);
       alert(`ERROR EN ANÁLISIS: ${error.message}`);
-      setStep('upload');
+      // setStep('upload'); // COMENTADO POR CTO: No resetear UI
     } finally {
       setIsAnalyzing(false);
     }
