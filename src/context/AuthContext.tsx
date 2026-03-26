@@ -30,7 +30,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const headers = { "Authorization": `Bearer ${token}` };
+      const headers = { 
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
       const res = await fetch(`${API_URL}/api/auth/me`, {
         headers,
         credentials: "include"
@@ -70,7 +73,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const API_URL = import.meta.env.VITE_API_URL || "";
     await fetch(`${API_URL}/api/auth/logout`, { 
       method: 'POST', 
-      headers: { "Authorization": `Bearer ${token}` },
+      headers: { 
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
       credentials: 'include' 
     });
     localStorage.removeItem("token");

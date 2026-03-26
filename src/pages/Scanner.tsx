@@ -118,9 +118,9 @@ export default function Scanner() {
       // Log obligatorio solicitado por el CTO
       console.log("TOKEN ENVIADO:", token);
 
-      if (!token || token === "null" || token === "undefined") {
-        console.error("DETENIENDO EJECUCIÓN: No hay token disponible");
-        alert("Sesión no válida. Por favor, inicia sesión nuevamente.");
+      if (!token) {
+        console.error("TOKEN NO DISPONIBLE EN FRONTEND");
+        alert("TOKEN NO DISPONIBLE EN FRONTEND. Por favor, inicia sesión.");
         setIsAnalyzing(false);
         setStep('upload');
         return;
@@ -131,8 +131,9 @@ export default function Scanner() {
         method: 'POST',
         credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${token}`
-          // Content-Type NO se incluye para FormData
+          "Authorization": `Bearer ${token}`
+          // Nota: Content-Type no se fuerza a application/json aquí 
+          // porque el cuerpo es FormData y el navegador debe setear el boundary.
         },
         body: formData,
       });
@@ -263,7 +264,7 @@ export default function Scanner() {
       console.log("TOKEN ENVIADO (PROJECTS):", token);
 
       if (!token) {
-        alert("Sesión expirada. No se puede guardar.");
+        alert("TOKEN NO DISPONIBLE EN FRONTEND. Inicia sesión para guardar.");
         return;
       }
 
@@ -271,8 +272,8 @@ export default function Scanner() {
         method: 'POST',
         credentials: 'include',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ projectData })
       });

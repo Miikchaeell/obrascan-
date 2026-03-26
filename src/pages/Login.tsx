@@ -37,17 +37,11 @@ export default function Login() {
         localStorage.setItem("token", data.token);
         
         const savedToken = localStorage.getItem("token");
-        console.log("TOKEN VERIFICADO EN STORAGE:", savedToken ? "PRESENT" : "MISSING");
+        console.log("TOKEN GUARDADO:", savedToken);
         
         if (!savedToken) {
           console.error("CRÍTICO: El token no se persistió en localStorage");
           setError("Error interno: No se pudo guardar la sesión");
-          return;
-        }
-
-        if (!savedToken) {
-          console.error("LOGIN OK PERO TOKEN NO PERSISTIDO");
-          setError("LOGIN OK PERO TOKEN NO PERSISTIDO");
           return;
         }
 
@@ -56,7 +50,10 @@ export default function Login() {
         
         try {
           const meRes = await fetch(`${API_URL}/api/auth/me`, { 
-            headers: { "Authorization": `Bearer ${data.token}` },
+            headers: { 
+              "Authorization": `Bearer ${data.token}`,
+              "Content-Type": "application/json"
+            },
             credentials: "include" 
           });
           
