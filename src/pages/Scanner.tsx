@@ -124,8 +124,8 @@ export default function Scanner() {
         body: formData,
       });
 
+      let data: any = {};
       if (!response.ok) {
-        let data: any = {};
         try {
           data = await response.json();
         } catch (e) {}
@@ -150,6 +150,8 @@ export default function Scanner() {
         }
         return;
       }
+
+      data = await response.json();
 
       if (!data.data) {
         throw new Error("Respuesta del servidor no contiene 'data'");
