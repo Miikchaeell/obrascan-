@@ -238,13 +238,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 app.post('/api/analyze', authenticateToken, checkUsageLimit, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No image' });
-    const apiKey = process.env.OPENAI_API_KEY || "";
-    console.log("OPENAI_API_KEY LOG:", { 
-      length: apiKey.length, 
-      prefix: apiKey.substring(0, 10), 
-      suffix: apiKey.substring(apiKey.length - 5) 
-    });
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const base64Image = fs.readFileSync(req.file.path).toString('base64');
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
