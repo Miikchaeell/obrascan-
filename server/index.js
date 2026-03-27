@@ -269,9 +269,9 @@ app.post('/api/projects', authenticateToken, upload.single('image'), async (req,
     const projectData = JSON.parse(req.body.projectData);
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : projectData.image;
     const { rows: [project] } = await pool.query(
-      `INSERT INTO projects (user_id, elemento, sistema, dimensiones, materiales, total_cost, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [req.user.id, projectData.elemento, projectData.sistema, JSON.stringify(projectData.dimensiones), JSON.stringify(projectData.materiales), projectData.totalCost, imageUrl]
+      `INSERT INTO projects (user_id, elemento, sistema, dimensiones, materiales, total_cost, image_url, prices, labor_prices, performance)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [req.user.id, projectData.elemento, projectData.sistema, JSON.stringify(projectData.dimensiones), JSON.stringify(projectData.materiales), projectData.totalCost, imageUrl, JSON.stringify(projectData.prices), JSON.stringify(projectData.labor_prices), projectData.performance]
     );
     res.json({ success: true, project });
   } catch (error) {

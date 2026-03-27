@@ -62,22 +62,33 @@ export default function Scanner() {
   });
   const [laborPrices, setLaborPrices] = useState({ maestro: 45000, ayudante: 30000 });
   const [performance, setPerformance] = useState(10); 
+  const [projectNameInput, setProjectNameInput] = useState("");
 
   useEffect(() => {
     if (location.state?.loadedProject) {
       const p = location.state.loadedProject;
+      
+      const parsedDims = typeof p.dimensiones === 'string' ? JSON.parse(p.dimensiones) : p.dimensiones;
+      const parsedMats = typeof p.materiales === 'string' ? JSON.parse(p.materiales) : p.materiales;
+      const parsedPrices = typeof p.prices === 'string' ? JSON.parse(p.prices) : p.prices;
+      const parsedLabor = typeof p.labor_prices === 'string' ? JSON.parse(p.labor_prices) : p.labor_prices;
+
       setResult({
-        elemento: p.elemento,
-        sistema: p.sistema,
-        dimensiones: p.dimensiones,
-        materiales: p.materiales || [],
+        elemento: p.elemento || "Proyecto Cargado",
+        sistema: p.sistema || "Estándar",
+        dimensiones: parsedDims,
+        materiales: parsedMats || [],
         confianza: "alta",
         observaciones: "Proyecto cargado desde el historial"
       });
-      setEditedDims(p.dimensiones);
-      if (p.prices) setPrices(p.prices);
-      if (p.laborPrices) setLaborPrices(p.laborPrices);
-      if (p.performance) setPerformance(p.performance);
+      
+      setEditedDims(parsedDims);
+      setProjectNameInput(p.elemento);
+      
+      if (parsedPrices) setPrices(parsedPrices);
+      if (parsedLabor) setLaborPrices(parsedLabor);
+      if (p.performance) setPerformance(Number(p.performance));
+      
       setHistoryImageUrl(p.image_url || p.image);
       setIsValidated(true);
       setStep('confirm');
@@ -173,6 +184,7 @@ export default function Scanner() {
         observaciones: backendData.observaciones || ""
       });
       
+      setProjectNameInput(`${backendData.elemento || 'Análisis'} - ${new Date().toLocaleDateString()}`);
       setEditedDims(receivedDims);
       setHistoryImageUrl(data.imageUrl);
       setStep('confirm');
@@ -232,53 +244,121 @@ export default function Scanner() {
     if (!result) return;
     setIsSaving(true);
     try {
+      const formData = new FormData();
       const projectData = {
-        elemento: result.elemento,
+        elemento: projectNameInput || result.elemento,
         sistema: result.sistema,
-        dimensiones: result.dimensiones,
-        materiales: result.materiales,
+        dimensiones: editedDims,
+        materiales: calculateMaterialQuantities(),
         totalCost: calculateTotalCost(),
-        prices,
-        laborPrices,
-        image: historyImageUrl
+        prices: prices,
+        labor_prices: laborPrices,
+        performance: performance,
+        image: historyImageUrl || imagePreview
       };
       
       const API_URL = import.meta.env.VITE_API_URL || "";
       const token = localStorage.getItem("token");
-      
-      console.log("TOKEN ENVIADO (PROJECTS):", token);
 
       if (!token) {
-        alert("TOKEN NO DISPONIBLE EN FRONTEND. Inicia sesión para guardar.");
+        alert("Inicia sesión para guardar.");
         return;
       }
+
+      formData.append("projectData", JSON.stringify(projectData));
+      if (selectedFile) formData.append("image", selectedFile);
 
       const res = await fetch(`${API_URL}/api/projects`, {
         method: 'POST',
         credentials: 'include',
         headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
+          "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ projectData })
+        body: formData
       });
+
       if (res.ok) {
-        alert("Proyecto guardado");
+        alert("¡Proyecto guardado con éxito!");
         navigate("/history");
+      } else {
+        const err = await res.json();
+        throw new Error(err.error || "Error al guardar");
       }
-    } catch (err) {
-      alert("Error al guardar");
+    } catch (err: any) {
+      alert(`Error al guardar: ${err.message}`);
     } finally {
       setIsSaving(false);
     }
   };
 
   const exportPDF = () => {
+    if (!result) return;
     const doc = new jsPDF();
     const total = calculateTotalCost();
-    doc.text(`COTIZACIÓN: ${result?.elemento}`, 14, 20);
-    doc.text(`Costo Total: $${total.toLocaleString('es-CL')}`, 14, 30);
-    doc.save("Cotizacion.pdf");
+    const dims = editedDims;
+    const materials = calculateMaterialQuantities();
+
+    // Header
+    doc.setFillColor(15, 23, 42); // Slate 900
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text("ObraGo", 15, 20);
+    doc.setFontSize(10);
+    doc.text("REPORTE DE CUBICACIÓN INTELIGENTE", 15, 30);
+    doc.text(new Date().toLocaleDateString(), 180, 20);
+
+    // Metadata
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(14);
+    doc.text(`PROYECTO: ${projectNameInput || 'Sin Nombre'}`, 15, 55);
+    doc.setFontSize(11);
+    doc.text(`Elemento: ${result.elemento}`, 15, 65);
+    doc.text(`Sistema: ${result.sistema}`, 15, 72);
+
+    // Dimensions
+    doc.setDrawColor(226, 232, 240); // Slate 200
+    doc.line(15, 80, 195, 80);
+    doc.setFontSize(10);
+    doc.text("DIMENSIONES (m)", 15, 90);
+    doc.text(`Largo: ${dims.largo}m    |    Ancho: ${dims.ancho}m    |    Espesor: ${dims.espesor}m`, 15, 100);
+
+    // Materials Table Header
+    doc.setFillColor(248, 250, 252); // Slate 50
+    doc.rect(15, 110, 180, 8, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.text("Material", 20, 116);
+    doc.text("Cantidad (c/pérdida)", 100, 116);
+    doc.text("Unid.", 150, 116);
+    doc.text("Costo Est.", 175, 116);
+
+    // Table Content
+    doc.setFont("helvetica", "normal");
+    let y = 125;
+    materials.forEach((m) => {
+      doc.text(m.name, 20, y);
+      doc.text(m.total.toString(), 100, y);
+      doc.text(m.unit, 150, y);
+      const cost = Math.round(parseFloat(m.total.toString()) * (prices[m.id] || 0));
+      doc.text(`$${cost.toLocaleString('es-CL')}`, 175, y);
+      y += 8;
+    });
+
+    // Totals
+    doc.line(15, y + 5, 195, y + 5);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("TOTAL NETO ESTIMADO:", 15, y + 20);
+    doc.setTextColor(37, 99, 235); // Blue 600
+    doc.text(`$${total.toLocaleString('es-CL')} CLP`, 120, y + 20);
+
+    // Footer
+    doc.setTextColor(148, 163, 184); // Slate 400
+    doc.setFontSize(8);
+    doc.text("Generado automáticamente por ObraGo AI. Este reporte es referencial.", 15, 280);
+
+    doc.save(`ObraGo_${projectNameInput.replace(/\s/g, '_')}.pdf`);
   };
 
   return (
@@ -351,12 +431,29 @@ export default function Scanner() {
 
         {result && step === 'confirm' && (
           <div className="p-5 space-y-6">
-            <div className="relative h-64 rounded-3xl overflow-hidden shadow-xl">
-              <img src={imagePreview || historyImageUrl || ''} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <div className="absolute bottom-4 left-4 text-white">
-                <span className="text-[10px] font-black uppercase tracking-widest bg-primary/80 px-2 py-1 rounded-md mb-2 inline-block">Detectado</span>
-                <h3 className="text-xl font-bold">{result.elemento}</h3>
+            <div className="bg-card border border-border rounded-3xl p-5 shadow-sm space-y-4">
+              <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Nombre del Proyecto</label>
+              <input 
+                type="text"
+                value={projectNameInput}
+                onChange={(e) => setProjectNameInput(e.target.value)}
+                placeholder="Ej: Muro Perimetral Casa 2"
+                className="w-full bg-secondary/50 border border-border rounded-2xl py-4 px-5 text-sm font-bold focus:ring-2 focus:ring-primary outline-none transition-all"
+              />
+            </div>
+
+            <div className="relative h-72 rounded-[32px] overflow-hidden shadow-2xl group border-4 border-white">
+              <img src={imagePreview || historyImageUrl || ''} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+              <div className="absolute bottom-6 left-6 text-white space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest bg-primary px-3 py-1 rounded-full shadow-lg">IA Detectado</span>
+                  <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg ${result.confianza === 'alta' ? 'bg-emerald-500' : 'bg-amber-500'}`}>
+                    Confianza {result.confianza}
+                  </span>
+                </div>
+                <h3 className="text-2xl font-black tracking-tight">{result.elemento}</h3>
+                <p className="text-xs font-bold text-white/70 italic">{result.sistema}</p>
               </div>
             </div>
 
@@ -391,32 +488,43 @@ export default function Scanner() {
               </div>
 
               {isValidated && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-4 space-y-6 border-t border-border">
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-6 space-y-6 border-t border-border/50">
                   <div className="flex items-center justify-between">
                     <h4 className="font-black text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                      <Calculator className="w-4 h-4" /> Materiales
+                      <Calculator className="w-4 h-4 text-primary" /> Cubicación de Materiales
                     </h4>
-                    <span className="text-[10px] font-bold bg-secondary px-3 py-1 rounded-full">{wastePercent}% de pérdida</span>
+                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-3 py-1 rounded-full ring-1 ring-primary/20">
+                      {wastePercent}% de margen
+                    </span>
                   </div>
 
                   <div className="space-y-3">
-                    {calculateMaterialQuantities().map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-4 bg-secondary/50 rounded-2xl border border-border/10">
-                        <div>
-                          <p className="text-xs font-bold">{item.name}</p>
-                          <p className="text-[10px] text-muted-foreground">Original: {item.base} {item.unit}</p>
+                    {calculateMaterialQuantities().map((item, idx) => {
+                       const itemTotalCost = Math.round(parseFloat(item.total.toString()) * (prices[item.id] || 0));
+                       return (
+                        <div key={idx} className="flex items-center justify-between p-4 bg-secondary/30 rounded-2xl border border-border/10 hover:bg-secondary/50 transition-colors">
+                          <div className="space-y-0.5">
+                            <p className="text-xs font-black text-foreground">{item.name}</p>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Neto: {item.base} {item.unit}</p>
+                          </div>
+                          <div className="text-right space-y-0.5">
+                            <p className="text-sm font-black text-primary">{item.total} {item.unit}</p>
+                            <p className="text-[10px] font-black text-muted-foreground/60">${itemTotalCost.toLocaleString('es-CL')}</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-black text-primary">{item.total} {item.unit}</p>
-                          <p className="text-[10px] font-bold">${((parseFloat(item.total.toString()) * (prices[item.id] || 0))).toLocaleString('es-CL')}</p>
-                        </div>
-                      </div>
-                    ))}
+                       );
+                    })}
                   </div>
 
-                  <div className="bg-primary/5 border border-primary/20 rounded-3xl p-6 text-center">
-                    <p className="text-xs font-bold text-primary uppercase tracking-widest mb-1">Costo Total Estimado</p>
-                    <p className="text-4xl font-black text-primary">${calculateTotalCost().toLocaleString('es-CL')}</p>
+                  <div className="bg-primary text-white rounded-[32px] p-8 text-center shadow-xl shadow-primary/20 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-2">Presupuesto Estimado</p>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-5xl font-black tabular-nums tracking-tighter">
+                        ${calculateTotalCost().toLocaleString('es-CL')}
+                      </span>
+                      <span className="text-xs font-bold opacity-60 self-end mb-2">CLP</span>
+                    </div>
                   </div>
                 </motion.div>
               )}

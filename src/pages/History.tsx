@@ -123,34 +123,45 @@ export default function History() {
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            <AnimatePresence>
+          <div className="grid grid-cols-1 gap-5">
+            <AnimatePresence mode="popLayout">
               {filteredProjects.map((p, idx) => (
                 <motion.div
                   key={p.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className="group relative bg-card border border-border rounded-3xl p-5 hover:border-primary/50 transition-all shadow-sm active:scale-[0.98]"
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ delay: idx * 0.03 }}
+                  className="group relative bg-card border border-border/60 rounded-[32px] p-4 hover:border-primary/40 transition-all shadow-sm hover:shadow-xl hover:shadow-primary/5 active:scale-[0.98] cursor-pointer"
+                  onClick={() => navigate("/scanner", { state: { loadedProject: p } })}
                 >
-                  <div className="flex gap-4">
-                    <div className="w-20 h-20 rounded-2xl bg-secondary overflow-hidden shrink-0 border border-border/10">
-                      <img src={p.image_url || p.image} alt="Project" className="w-full h-full object-cover" />
+                  <div className="flex gap-5">
+                    <div className="w-24 h-24 rounded-2xl bg-secondary overflow-hidden shrink-0 border border-border/10 shadow-inner">
+                      <img 
+                        src={p.image_url ? (p.image_url.startsWith('http') ? p.image_url : `${import.meta.env.VITE_API_URL}${p.image_url}`) : '/placeholder.jpg'} 
+                        alt="Project" 
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                      />
                     </div>
-                    <div className="flex-1 min-w-0" onClick={() => navigate("/scanner", { state: { loadedProject: p } })}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-black uppercase text-primary tracking-widest">#{p.id}</span>
-                        <div className="flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(p.created_at).toLocaleDateString()}
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="flex items-center gap-1 text-[8px] font-black text-muted-foreground/60 uppercase tracking-widest">
+                          <Calendar className="w-2.5 h-2.5" />
+                          {new Date(p.date || p.created_at).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}
                         </div>
+                        <span className="w-1 h-1 bg-border rounded-full" />
+                        <span className="text-[8px] font-black uppercase text-primary tracking-widest">ID {p.id.toString().substring(0,4)}</span>
                       </div>
-                      <h3 className="font-bold text-foreground truncate">{p.elemento}</h3>
-                      <p className="text-xs text-muted-foreground font-medium mb-3">{p.sistema}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-primary">${p.total_cost?.toLocaleString('es-CL')}</span>
-                        <div className="flex items-center gap-1 text-primary text-[10px] font-bold uppercase tracking-tighter">
-                          Ver Detalle <ChevronRight className="w-3 h-3" />
+                      <h3 className="font-black text-sm text-foreground truncate mb-0.5 tracking-tight">{p.elemento}</h3>
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase truncate mb-3 opacity-70">{p.sistema}</p>
+                      
+                      <div className="flex items-center justify-between mt-auto">
+                        <span className="text-sm font-black text-primary tabular-nums tracking-tighter">
+                          ${Number(p.total_cost).toLocaleString('es-CL')}
+                        </span>
+                        <div className="bg-secondary/80 p-1.5 rounded-full text-primary group-hover:bg-primary group-hover:text-white transition-all">
+                          <ChevronRight className="w-3 h-3" />
                         </div>
                       </div>
                     </div>
@@ -158,9 +169,9 @@ export default function History() {
                   
                   <button 
                     onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }}
-                    className="absolute top-4 right-4 p-2 rounded-xl bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-all hover:bg-destructive hover:text-white"
+                    className="absolute -top-2 -right-2 p-2 rounded-full bg-destructive/10 text-destructive border border-destructive/20 opacity-0 group-hover:opacity-100 transition-all hover:bg-destructive hover:text-white shadow-lg backdrop-blur-md"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </motion.div>
               ))}
