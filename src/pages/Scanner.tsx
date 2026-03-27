@@ -81,6 +81,8 @@ export default function Scanner() {
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [customMaterials, setCustomMaterials] = useState<MaterialLine[]>([]);
   const [customLaborRate, setCustomLaborRate] = useState<number | null>(null);
+  const [ggPercent, setGgPercent] = useState(12);
+  const [profitPercent, setProfitPercent] = useState(15);
 
   useEffect(() => {
     if (location.state?.loadedProject) {
@@ -96,6 +98,8 @@ export default function Scanner() {
         setCustomMaterials(parsedMats);
       }
       if (p.labor_rate) setCustomLaborRate(p.labor_rate);
+      if (p.gg_percent) setGgPercent(p.gg_percent);
+      if (p.profit_percent) setProfitPercent(p.profit_percent);
 
       setResult({
         elemento: p.elemento || "Proyecto Cargado",
@@ -300,10 +304,18 @@ export default function Scanner() {
   const calculateTotalCost = () => {
     const materialsTotal = currentMaterials.reduce((acc, m) => acc + m.total, 0);
     const laborTotal = calculateLaborCost();
+    const costoDirecto = materialsTotal + laborTotal;
+    const ggAmount = Math.round(costoDirecto * (ggPercent / 100));
+    const profitAmount = Math.round((costoDirecto + ggAmount) * (profitPercent / 100));
+    const totalVenta = costoDirecto + ggAmount + profitAmount;
+    
     return {
       materials: materialsTotal,
       labor: laborTotal,
-      total: materialsTotal + laborTotal
+      costoDirecto,
+      gg: ggAmount,
+      profit: profitAmount,
+      total: totalVenta
     };
   };
 
@@ -323,6 +335,8 @@ export default function Scanner() {
         performance: performance,
         selectedSystemId,
         labor_rate: customLaborRate,
+        gg_percent: ggPercent,
+        profit_percent: profitPercent,
         image: historyImageUrl || imagePreview
       };
       
@@ -363,7 +377,7 @@ export default function Scanner() {
   const exportPDF = () => {
     if (!result) return;
     const doc = new jsPDF();
-    const { materials: matCost, labor: laborCost, total } = calculateTotalCost();
+    const { materials: matCost, labor: laborCost, costoDirecto, gg: ggAmount, profit: profitAmount, total } = calculateTotalCost();
     const dims = editedDims;
     const materials = currentMaterials;
 
@@ -375,7 +389,7 @@ export default function Scanner() {
     doc.setFont("helvetica", "bold");
     doc.text("ObraGo", 15, 20);
     doc.setFontSize(10);
-    doc.text("REPORTE DE CUBICACIÓN INTELIGENTE", 15, 30);
+    doc.text("REPORTE DE ANÁLISIS DE PRECIO UNITARIO (APU)", 15, 30);
     doc.text(new Date().toLocaleDateString(), 180, 20);
 
     // Metadata
@@ -384,7 +398,7 @@ export default function Scanner() {
     doc.text(`PROYECTO: ${projectNameInput || 'Sin Nombre'}`, 15, 55);
     doc.setFontSize(11);
     doc.text(`Elemento: ${result.elemento}`, 15, 65);
-    doc.text(`Sistema: ${result.sistema}`, 15, 72);
+    doc.text(`Sistema: ${SYSTEMS_CATALOG.find(s => s.id === selectedSystemId)?.name || result.sistema}`, 15, 72);
 
     // Dimensions
     doc.setDrawColor(226, 232, 240); // Slate 200
@@ -397,10 +411,10 @@ export default function Scanner() {
     doc.setFillColor(248, 250, 252); // Slate 50
     doc.rect(15, 110, 180, 8, 'F');
     doc.setFont("helvetica", "bold");
-    doc.text("Material", 20, 116);
-    doc.text("Cantidad (c/pérdida)", 100, 116);
-    doc.text("Unid.", 150, 116);
-    doc.text("Costo Est.", 175, 116);
+    doc.text("Insumo / Material", 20, 116);
+    doc.text("Cantidad", 100, 116);
+    doc.text("Unid.", 140, 116);
+    doc.text("Costo Neto", 170, 116);
 
     // Table Content
     doc.setFont("helvetica", "normal");
@@ -408,8 +422,8 @@ export default function Scanner() {
     materials.forEach((m) => {
       doc.text(m.name, 20, y);
       doc.text(m.quantity.toString(), 100, y);
-      doc.text(m.unit, 150, y);
-      doc.text(`$${m.total.toLocaleString('es-CL')}`, 175, y);
+      doc.text(m.unit, 140, y);
+      doc.text(`$${m.total.toLocaleString('es-CL')}`, 170, y);
       y += 8;
     });
 
@@ -419,30 +433,40 @@ export default function Scanner() {
     doc.text("MANO DE OBRA", 20, y);
     doc.setFont("helvetica", "normal");
     doc.text(`Tarifa: $${(customLaborRate || 0).toLocaleString('es-CL')} x un`, 100, y);
-    doc.text(`$${laborCost.toLocaleString('es-CL')}`, 175, y);
+    doc.text(`$${laborCost.toLocaleString('es-CL')}`, 170, y);
     
-    // Time
-    y += 10;
+    // Summary APU Block
+    y += 15;
+    doc.setFillColor(241, 245, 249); // Slate 100
+    doc.rect(15, y, 180, 45, 'F');
     doc.setFont("helvetica", "bold");
-    doc.text(`TIEMPO ESTIMADO: ${calculateEstimatedTime()} DÍAS`, 20, y);
-
-    doc.line(15, y + 5, 195, y + 5);
-    doc.setFontSize(12);
-    doc.text(`Subtotal Materiales: $${matCost.toLocaleString('es-CL')}`, 15, y + 15);
-    doc.text(`Subtotal Mano Obra: $${laborCost.toLocaleString('es-CL')}`, 15, y + 22);
+    doc.text("RESUMEN DE COSTOS (APU)", 20, y + 8);
+    doc.setFont("helvetica", "normal");
+    doc.text("SUBTOTAL COSTO DIRECTO:", 20, y + 16);
+    doc.text(`$${costoDirecto.toLocaleString('es-CL')}`, 170, y + 16);
+    doc.text(`GASTOS GENERALES (${ggPercent}%):`, 20, y + 24);
+    doc.text(`+ $${ggAmount.toLocaleString('es-CL')}`, 170, y + 24);
+    doc.text(`UTILIDAD (${profitPercent}%):`, 20, y + 32);
+    doc.text(`+ $${profitAmount.toLocaleString('es-CL')}`, 170, y + 32);
     
+    // Subtotal components reference for lint fix
+    console.log(`Exporting PDF with Material Cost: ${matCost}`); 
+
+    // Total
+    y += 40;
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text("TOTAL NETO:", 15, y + 35);
+    doc.text("TOTAL VENTA NETO:", 20, y + 5);
     doc.setTextColor(37, 99, 235);
-    doc.text(`$${total.toLocaleString('es-CL')} CLP`, 120, y + 35);
+    doc.text(`$${total.toLocaleString('es-CL')} CLP`, 130, y + 5);
 
     // Footer
     doc.setTextColor(148, 163, 184); // Slate 400
     doc.setFontSize(8);
-    doc.text("Generado automáticamente por ObraGo AI. Este reporte es referencial.", 15, 280);
+    doc.text(`Ejecución Estimada: ${calculateEstimatedTime()} días hábiles.`, 15, 275);
+    doc.text("Generado automáticamente por ObraGo AI. Este reporte es referencial para presupuestos de obra.", 15, 282);
 
-    doc.save(`ObraGo_${projectNameInput.replace(/\s/g, '_')}.pdf`);
+    doc.save(`APU_ObraGo_${projectNameInput.replace(/\s/g, '_')}.pdf`);
   };
 
   return (
@@ -719,31 +743,76 @@ export default function Scanner() {
                     </div>
                   </div>
 
-                  {/* TOTAL SUMMARY */}
+                  {/* APU INDIRECTS SECTION */}
+                  <div className="pt-6 border-t border-border/50 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-black text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                        <Maximize className="w-4 h-4 text-primary" /> Costos Indirectos
+                      </h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-secondary/20 rounded-2xl border border-border/10 space-y-1">
+                        <label className="text-[9px] font-bold text-muted-foreground uppercase px-1">G. Generales (%)</label>
+                        <input 
+                          type="number"
+                          value={ggPercent}
+                          onChange={(e) => setGgPercent(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-background border border-border rounded-xl py-2 px-3 text-xs font-bold focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                      <div className="p-4 bg-secondary/20 rounded-2xl border border-border/10 space-y-1">
+                        <label className="text-[9px] font-bold text-muted-foreground uppercase px-1">Utilidad (%)</label>
+                        <input 
+                          type="number"
+                          value={profitPercent}
+                          onChange={(e) => setProfitPercent(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-background border border-border rounded-xl py-2 px-3 text-xs font-bold focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PROFESSIONAL APU SUMMARY */}
                   <div className="bg-primary text-white rounded-[32px] p-8 shadow-xl shadow-primary/20 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl" />
-                    <div className="space-y-4 relative z-10">
-                      <div className="flex justify-between items-center opacity-80 text-[10px] font-black uppercase tracking-widest">
-                        <span>Resumen Presupuesto</span>
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-24 -mt-24 blur-3xl" />
+                    <div className="space-y-6 relative z-10">
+                      <div className="flex justify-between items-center opacity-80 text-[10px] font-black uppercase tracking-[0.2em]">
+                        <span>Análisis de Precio Unitario (APU)</span>
                         <span>CLP</span>
                       </div>
                       
-                      <div className="space-y-2 border-b border-white/10 pb-4">
-                        <div className="flex justify-between text-xs font-bold opacity-70">
-                          <span>Materiales (+{wastePercent}%)</span>
+                      <div className="space-y-3 font-bold border-b border-white/10 pb-6">
+                        <div className="flex justify-between text-xs opacity-70">
+                          <span>Subtotal Materiales</span>
                           <span>${calculateTotalCost().materials.toLocaleString('es-CL')}</span>
                         </div>
-                        <div className="flex justify-between text-xs font-bold opacity-70">
+                        <div className="flex justify-between text-xs opacity-70">
                           <span>Mano de Obra</span>
                           <span>${calculateTotalCost().labor.toLocaleString('es-CL')}</span>
                         </div>
+                        <div className="flex justify-between text-sm pt-2 border-t border-white/5">
+                          <span>COSTO DIRECTO</span>
+                          <span>${calculateTotalCost().costoDirecto.toLocaleString('es-CL')}</span>
+                        </div>
+                        
+                        <div className="flex justify-between text-xs pt-2 opacity-70">
+                          <span>Gastos Generales ({ggPercent}%)</span>
+                          <span>+ ${calculateTotalCost().gg.toLocaleString('es-CL')}</span>
+                        </div>
+                        <div className="flex justify-between text-xs opacity-70">
+                          <span>Utilidad ({profitPercent}%)</span>
+                          <span>+ ${calculateTotalCost().profit.toLocaleString('es-CL')}</span>
+                        </div>
                       </div>
 
-                      <div className="flex items-center justify-center gap-2 pt-2">
-                        <span className="text-5xl font-black tabular-nums tracking-tighter">
-                          ${calculateTotalCost().total.toLocaleString('es-CL')}
-                        </span>
-                        <span className="text-xs font-bold opacity-60 self-end mb-2">Neto</span>
+                      <div className="flex flex-col items-center pt-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Total Venta Neto</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-5xl font-black tabular-nums tracking-tighter">
+                            ${calculateTotalCost().total.toLocaleString('es-CL')}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
