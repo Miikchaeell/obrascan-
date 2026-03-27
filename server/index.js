@@ -33,6 +33,7 @@ const pool = new Pool({
 pool.query(`
   ALTER TABLE projects ADD COLUMN IF NOT EXISTS selected_system_id TEXT;
   ALTER TABLE projects ADD COLUMN IF NOT EXISTS performance NUMERIC;
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS labor_rate NUMERIC;
 `).then(() => console.log("DB MIGRATION SUCCESSFUL"))
   .catch(err => console.error("DB MIGRATION ERROR:", err));
 
@@ -249,8 +250,27 @@ app.post('/api/analyze', authenticateToken, checkUsageLimit, upload.single('imag
     const base64Image = fs.readFileSync(req.file.path).toString('base64');
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
-      messages: [{ role: "system", content: "Expert construction engineer. Extract structure, element, dimensions. Return strict JSON." },
-                 { role: "user", content: [{ type: "text", text: "Analyze this image." }, { type: "image_url", image_url: { url: `data:${req.file.mimetype};base64,${base64Image}` } }] }],
+      messages: [{ 
+        role: "system", 
+        content: `Expert construction engineer. Analyze the structure and return strict JSON.
+        You MUST classify the structure into one of these IDs if possible: [tabique_st, cielo_falso_st, radier_estandar].
+        Format: {
+          "elemento": "string (e.g. Muro de Volcanita)",
+          "sistema_id": "string (one of the IDs above or null)",
+          "sistema_constructivo": "string (detailed description)",
+          "dimensiones": { "largo": number, "ancho": number, "espesor": number },
+          "materiales_detectados": ["string"],
+          "confianza": "alta|media|baja",
+          "observaciones": "string"
+        }` 
+      },
+      { 
+        role: "user", 
+        content: [
+          { type: "text", text: "Analyze this image for construction budgeting." }, 
+          { type: "image_url", image_url: { url: `data:${req.file.mimetype};base64,${base64Image}` } }
+        ] 
+      }],
       response_format: { type: "json_object" }
     });
     const parsedData = JSON.parse(response.choices[0].message.content);
@@ -276,20 +296,21 @@ app.post('/api/projects', authenticateToken, upload.single('image'), async (req,
     const projectData = JSON.parse(req.body.projectData);
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : projectData.image;
     const { rows: [project] } = await pool.query(
-      `INSERT INTO projects (user_id, elemento, sistema, dimensiones, materiales, total_cost, image_url, prices, labor_prices, performance, selected_system_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      `INSERT INTO projects (user_id, elemento, sistema, dimensiones, materiales, total_cost, image_url, prices, labor_prices, performance, selected_system_id, labor_rate)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [
         req.user.id, 
         projectData.elemento, 
         projectData.sistema, 
         JSON.stringify(projectData.dimensiones), 
         JSON.stringify(projectData.materiales), 
-        projectData.totalCost, 
+        projectData.totalCost.total, 
         imageUrl, 
         JSON.stringify(projectData.prices), 
         JSON.stringify(projectData.labor_prices), 
         projectData.performance,
-        projectData.selectedSystemId
+        projectData.selectedSystemId,
+        projectData.labor_rate
       ]
     );
     res.json({ success: true, project });

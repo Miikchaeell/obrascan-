@@ -15,7 +15,9 @@ import {
   Sparkles, 
   X,
   Plus,
-  Trash2
+  Trash2,
+  Users,
+  Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -78,6 +80,7 @@ export default function Scanner() {
   const [projectNameInput, setProjectNameInput] = useState("");
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [customMaterials, setCustomMaterials] = useState<MaterialLine[]>([]);
+  const [customLaborRate, setCustomLaborRate] = useState<number | null>(null);
 
   useEffect(() => {
     if (location.state?.loadedProject) {
@@ -92,6 +95,7 @@ export default function Scanner() {
       if (parsedMats && Array.isArray(parsedMats)) {
         setCustomMaterials(parsedMats);
       }
+      if (p.labor_rate) setCustomLaborRate(p.labor_rate);
 
       setResult({
         elemento: p.elemento || "Proyecto Cargado",
@@ -183,32 +187,37 @@ export default function Scanner() {
       }
 
       data = await response.json();
-
       const backendData = data.data;
       
-      // Mapeo robusto: buscar dimensiones en varios formatos posibles del JSON de la IA
       const receivedDims = {
-        largo: Number(backendData.dimensiones?.largo || backendData.dimensiones?.alto_m || 0),
-        ancho: Number(backendData.dimensiones?.ancho || backendData.dimensiones?.ancho_m || 0),
-        espesor: Number(backendData.dimensiones?.espesor || backendData.dimensiones?.espesor_m || 0)
+        largo: Number(backendData.dimensiones?.largo || 0),
+        ancho: Number(backendData.dimensiones?.ancho || 0),
+        espesor: Number(backendData.dimensiones?.espesor || 0)
       };
 
-      console.log("Dimesiones recibidas:", receivedDims);
+      const detectedId = backendData.sistema_id;
+      let bestSystem = detectedId || SYSTEMS_CATALOG[0].id;
       
-      const detectedElem = (backendData.elemento || "").toLowerCase();
-      let bestSystem = SYSTEMS_CATALOG[0].id;
-      if (detectedElem.includes("muro") || detectedElem.includes("tabique")) bestSystem = "tabique_st";
-      if (detectedElem.includes("cielo")) bestSystem = "cielo_falso_st";
-      if (detectedElem.includes("radier") || detectedElem.includes("losa")) bestSystem = "radier_estandar";
+      if (!detectedId) {
+        const detectedElem = (backendData.elemento || "").toLowerCase();
+        if (detectedElem.includes("muro") || detectedElem.includes("tabique")) bestSystem = "tabique_st";
+        if (detectedElem.includes("cielo")) bestSystem = "cielo_falso_st";
+        if (detectedElem.includes("radier") || detectedElem.includes("losa")) bestSystem = "radier_estandar";
+      }
       
       setSelectedSystemId(bestSystem);
+      const sys = SYSTEMS_CATALOG.find(s => s.id === bestSystem);
+      if (sys) {
+        setPerformance(sys.performance);
+        setCustomLaborRate(sys.laborRate);
+      }
       
       setResult({
-        elemento: backendData.elemento || backendData.structure || "Estructura Detectada",
-        sistema: backendData.sistema_constructivo || backendData.layout || "Sistema Estándar",
+        elemento: backendData.elemento || "Estructura Detectada",
+        sistema: backendData.sistema_constructivo || "Sistema Estándar",
         dimensiones: receivedDims,
-        materiales: backendData.materiales_detectados || backendData.elements || [],
-        confianza: "alta",
+        materiales: backendData.materiales_detectados || [],
+        confianza: backendData.confianza || "alta",
         observaciones: backendData.observaciones || ""
       });
       
@@ -268,12 +277,34 @@ export default function Scanner() {
 
   const currentMaterials = calculateMaterialQuantities();
 
+  const calculateLaborCost = () => {
+    if (!selectedSystemId) return 0;
+    const system = SYSTEMS_CATALOG.find(s => s.id === selectedSystemId);
+    if (!system) return 0;
+    const { area, volume } = calculateGeometricData();
+    const baseValue = system.baseUnit === 'm2' ? area : volume;
+    const rate = customLaborRate !== null ? customLaborRate : system.laborRate;
+    return Math.round(baseValue * rate);
+  };
+
+  const calculateEstimatedTime = () => {
+    if (!selectedSystemId) return 0;
+    const system = SYSTEMS_CATALOG.find(s => s.id === selectedSystemId);
+    if (!system) return 0;
+    const { area, volume } = calculateGeometricData();
+    const baseValue = system.baseUnit === 'm2' ? area : volume;
+    const perf = performance || system.performance || 1;
+    return Math.ceil(baseValue / perf);
+  };
+
   const calculateTotalCost = () => {
-    const materials = currentMaterials;
-    const matCost = materials.reduce((acc, item) => acc + item.total, 0);
-    const { area } = calculateGeometricData();
-    const labor = (area / performance) * (laborPrices.maestro + laborPrices.ayudante);
-    return Math.round(matCost + labor);
+    const materialsTotal = currentMaterials.reduce((acc, m) => acc + m.total, 0);
+    const laborTotal = calculateLaborCost();
+    return {
+      materials: materialsTotal,
+      labor: laborTotal,
+      total: materialsTotal + laborTotal
+    };
   };
 
   const handleSaveProject = async () => {
@@ -291,6 +322,7 @@ export default function Scanner() {
         labor_prices: laborPrices,
         performance: performance,
         selectedSystemId,
+        labor_rate: customLaborRate,
         image: historyImageUrl || imagePreview
       };
       
@@ -331,7 +363,7 @@ export default function Scanner() {
   const exportPDF = () => {
     if (!result) return;
     const doc = new jsPDF();
-    const total = calculateTotalCost();
+    const { materials: matCost, labor: laborCost, total } = calculateTotalCost();
     const dims = editedDims;
     const materials = currentMaterials;
 
@@ -381,13 +413,29 @@ export default function Scanner() {
       y += 8;
     });
 
-    // Totals
-    doc.line(15, y + 5, 195, y + 5);
+    // Labor
+    y += 10;
     doc.setFont("helvetica", "bold");
+    doc.text("MANO DE OBRA", 20, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Tarifa: $${(customLaborRate || 0).toLocaleString('es-CL')} x un`, 100, y);
+    doc.text(`$${laborCost.toLocaleString('es-CL')}`, 175, y);
+    
+    // Time
+    y += 10;
+    doc.setFont("helvetica", "bold");
+    doc.text(`TIEMPO ESTIMADO: ${calculateEstimatedTime()} DÍAS`, 20, y);
+
+    doc.line(15, y + 5, 195, y + 5);
+    doc.setFontSize(12);
+    doc.text(`Subtotal Materiales: $${matCost.toLocaleString('es-CL')}`, 15, y + 15);
+    doc.text(`Subtotal Mano Obra: $${laborCost.toLocaleString('es-CL')}`, 15, y + 22);
+    
     doc.setFontSize(16);
-    doc.text("TOTAL NETO ESTIMADO:", 15, y + 20);
-    doc.setTextColor(37, 99, 235); // Blue 600
-    doc.text(`$${total.toLocaleString('es-CL')} CLP`, 120, y + 20);
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL NETO:", 15, y + 35);
+    doc.setTextColor(37, 99, 235);
+    doc.text(`$${total.toLocaleString('es-CL')} CLP`, 120, y + 35);
 
     // Footer
     doc.setTextColor(148, 163, 184); // Slate 400
@@ -624,16 +672,79 @@ export default function Scanner() {
                     >
                       <Plus className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" /> Agregar Insumo
                     </Button>
+
+                    {/* MANO DE OBRA SECTION */}
+                    <div className="pt-6 border-t border-border/50 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-black text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                          <Users className="w-4 h-4 text-primary" /> Mano de Obra
+                        </h4>
+                      </div>
+                      
+                      <div className="p-5 bg-secondary/30 rounded-3xl border border-border/10 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-muted-foreground uppercase px-1">Tarifa por {SYSTEMS_CATALOG.find(s => s.id === selectedSystemId)?.baseUnit || 'u'}</label>
+                            <input 
+                              type="number"
+                              value={customLaborRate || 0}
+                              aria-label="Tarifa de Mano de Obra"
+                              placeholder="0"
+                              onChange={(e) => setCustomLaborRate(parseInt(e.target.value) || 0)}
+                              className="w-full bg-background border border-border rounded-xl py-2 px-3 text-xs font-bold focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                          <div className="text-right flex flex-col justify-center">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase">Subtotal M.O</span>
+                            <span className="text-xs font-black text-primary">${calculateLaborCost().toLocaleString('es-CL')}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* ESTIMATED TIME indicator */}
+                      <div className="flex items-center justify-between px-5 py-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-600">
+                             <Clock className="w-4 h-4 text-emerald-600" />
+                          </div>
+                          <div className="space-y-0.5">
+                            <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Ejecución Estimada</p>
+                            <p className="text-xs font-bold text-emerald-600">{calculateEstimatedTime()} jornada(s) hábil(es)</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                           <span className="text-[9px] font-black text-emerald-700/50 uppercase">Rend: {performance} un/día</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="bg-primary text-white rounded-[32px] p-8 text-center shadow-xl shadow-primary/20 relative overflow-hidden">
+                  {/* TOTAL SUMMARY */}
+                  <div className="bg-primary text-white rounded-[32px] p-8 shadow-xl shadow-primary/20 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-2">Presupuesto Estimado</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-5xl font-black tabular-nums tracking-tighter">
-                        ${calculateTotalCost().toLocaleString('es-CL')}
-                      </span>
-                      <span className="text-xs font-bold opacity-60 self-end mb-2">CLP</span>
+                    <div className="space-y-4 relative z-10">
+                      <div className="flex justify-between items-center opacity-80 text-[10px] font-black uppercase tracking-widest">
+                        <span>Resumen Presupuesto</span>
+                        <span>CLP</span>
+                      </div>
+                      
+                      <div className="space-y-2 border-b border-white/10 pb-4">
+                        <div className="flex justify-between text-xs font-bold opacity-70">
+                          <span>Materiales (+{wastePercent}%)</span>
+                          <span>${calculateTotalCost().materials.toLocaleString('es-CL')}</span>
+                        </div>
+                        <div className="flex justify-between text-xs font-bold opacity-70">
+                          <span>Mano de Obra</span>
+                          <span>${calculateTotalCost().labor.toLocaleString('es-CL')}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-center gap-2 pt-2">
+                        <span className="text-5xl font-black tabular-nums tracking-tighter">
+                          ${calculateTotalCost().total.toLocaleString('es-CL')}
+                        </span>
+                        <span className="text-xs font-bold opacity-60 self-end mb-2">Neto</span>
+                      </div>
                     </div>
                   </div>
                 </motion.div>

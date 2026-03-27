@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS projects (
     labor_prices JSONB, -- Labor prices
     performance NUMERIC, -- Performance factor
     selected_system_id TEXT, -- Catalog system ID
+    labor_rate NUMERIC, -- Custom labor rate CLP/un
     image_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
