@@ -29,6 +29,13 @@ const pool = new Pool({
   ssl: isProduction ? { rejectUnauthorized: false } : false
 });
 
+// AUTO MIGRATION
+pool.query(`
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS selected_system_id TEXT;
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS performance NUMERIC;
+`).then(() => console.log("DB MIGRATION SUCCESSFUL"))
+  .catch(err => console.error("DB MIGRATION ERROR:", err));
+
 // Auto-initialize DB tables on startup
 const initDB = async () => {
   try {
@@ -269,9 +276,21 @@ app.post('/api/projects', authenticateToken, upload.single('image'), async (req,
     const projectData = JSON.parse(req.body.projectData);
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : projectData.image;
     const { rows: [project] } = await pool.query(
-      `INSERT INTO projects (user_id, elemento, sistema, dimensiones, materiales, total_cost, image_url, prices, labor_prices, performance)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [req.user.id, projectData.elemento, projectData.sistema, JSON.stringify(projectData.dimensiones), JSON.stringify(projectData.materiales), projectData.totalCost, imageUrl, JSON.stringify(projectData.prices), JSON.stringify(projectData.labor_prices), projectData.performance]
+      `INSERT INTO projects (user_id, elemento, sistema, dimensiones, materiales, total_cost, image_url, prices, labor_prices, performance, selected_system_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [
+        req.user.id, 
+        projectData.elemento, 
+        projectData.sistema, 
+        JSON.stringify(projectData.dimensiones), 
+        JSON.stringify(projectData.materiales), 
+        projectData.totalCost, 
+        imageUrl, 
+        JSON.stringify(projectData.prices), 
+        JSON.stringify(projectData.labor_prices), 
+        projectData.performance,
+        projectData.selectedSystemId
+      ]
     );
     res.json({ success: true, project });
   } catch (error) {

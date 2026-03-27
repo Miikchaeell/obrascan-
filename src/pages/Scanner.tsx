@@ -11,13 +11,16 @@ import {
   Calculator, 
   Loader2,
   Crown,
-  Maximize,
-  Sparkles,
-  X
+  Maximize, 
+  Sparkles, 
+  X,
+  Plus,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { jsPDF } from "jspdf";
+import { MATERIALS_CATALOG, SYSTEMS_CATALOG } from "@/constants/catalog";
 
 type AnalysisResult = {
   elemento: string;
@@ -27,9 +30,19 @@ type AnalysisResult = {
     ancho: number;
     espesor: number;
   };
-  materiales: string[];
+  materiales: any[];
   confianza: "alta" | "media" | "baja";
   observaciones: string;
+};
+
+type MaterialLine = {
+  id: string;
+  name: string;
+  unit: string;
+  baseQuantity: number; // Por m2/m3
+  quantity: number; // Total con pérdida
+  price: number;
+  total: number;
 };
 
 export default function Scanner() {
@@ -63,6 +76,8 @@ export default function Scanner() {
   const [laborPrices, setLaborPrices] = useState({ maestro: 45000, ayudante: 30000 });
   const [performance, setPerformance] = useState(10); 
   const [projectNameInput, setProjectNameInput] = useState("");
+  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
+  const [customMaterials, setCustomMaterials] = useState<MaterialLine[]>([]);
 
   useEffect(() => {
     if (location.state?.loadedProject) {
@@ -72,6 +87,11 @@ export default function Scanner() {
       const parsedMats = typeof p.materiales === 'string' ? JSON.parse(p.materiales) : p.materiales;
       const parsedPrices = typeof p.prices === 'string' ? JSON.parse(p.prices) : p.prices;
       const parsedLabor = typeof p.labor_prices === 'string' ? JSON.parse(p.labor_prices) : p.labor_prices;
+
+      setSelectedSystemId(p.selected_system_id || p.selectedSystemId || null);
+      if (parsedMats && Array.isArray(parsedMats)) {
+        setCustomMaterials(parsedMats);
+      }
 
       setResult({
         elemento: p.elemento || "Proyecto Cargado",
@@ -175,6 +195,14 @@ export default function Scanner() {
 
       console.log("Dimesiones recibidas:", receivedDims);
       
+      const detectedElem = (backendData.elemento || "").toLowerCase();
+      let bestSystem = SYSTEMS_CATALOG[0].id;
+      if (detectedElem.includes("muro") || detectedElem.includes("tabique")) bestSystem = "tabique_st";
+      if (detectedElem.includes("cielo")) bestSystem = "cielo_falso_st";
+      if (detectedElem.includes("radier") || detectedElem.includes("losa")) bestSystem = "radier_estandar";
+      
+      setSelectedSystemId(bestSystem);
+      
       setResult({
         elemento: backendData.elemento || backendData.structure || "Estructura Detectada",
         sistema: backendData.sistema_constructivo || backendData.layout || "Sistema Estándar",
@@ -207,34 +235,42 @@ export default function Scanner() {
     return { area, volume, showVolume };
   };
 
-  const calculateMaterialQuantities = () => {
-    if (!result) return [];
-    const { area, volume } = calculateGeometricData();
-    const factor = 1 + wastePercent / 100;
-    const elem = result.elemento.toLowerCase();
-    const items = [];
+  const calculateMaterialQuantities = (): MaterialLine[] => {
+    if (!result || !selectedSystemId) return [];
+    
+    // Si hay materiales personalizados y ya estamos validados, retornar esos
+    if (isValidated && customMaterials.length > 0) return customMaterials;
 
-    if (elem.includes("muro") || elem.includes("tabique")) {
-      const bricks = area * 38;
-      items.push({ id: "ladrillo", name: "Ladrillos", base: Math.round(bricks), total: Math.round(bricks * factor), unit: "un" });
-      const mortar = area * 0.5;
-      items.push({ id: "mortero", name: "Mortero", base: Math.ceil(mortar), total: Math.ceil(mortar * factor), unit: "sacos" });
-    } else if (elem.includes("radier") || elem.includes("losa")) {
-      items.push({ id: "hormigon", name: "Hormigón", base: volume.toFixed(2), total: (volume * factor).toFixed(2), unit: "m³" });
-      items.push({ id: "malla", name: "Malla ACMA", base: area.toFixed(1), total: (area * factor).toFixed(1), unit: "m²" });
-    } else {
-      items.push({ id: "otros", name: "Material Estimado", base: area.toFixed(1), total: (area * factor).toFixed(1), unit: "un" });
-    }
-    return items;
+    const system = SYSTEMS_CATALOG.find(s => s.id === selectedSystemId);
+    if (!system) return [];
+
+    const { area, volume } = calculateGeometricData();
+    const baseValue = system.baseUnit === 'm2' ? area : volume;
+    const factor = 1 + wastePercent / 100;
+
+    return system.materialIds.map(mid => {
+      const mat = MATERIALS_CATALOG.find(m => m.id === mid);
+      if (!mat) return null;
+      const baseQty = Number((baseValue * mat.coverage).toFixed(2));
+      const totalQty = Number((baseQty * factor).toFixed(2));
+      const price = prices[mat.id] || mat.refPrice;
+      return {
+        id: mat.id,
+        name: mat.name,
+        unit: mat.unit,
+        baseQuantity: baseQty,
+        quantity: totalQty,
+        price: price,
+        total: Math.round(totalQty * price)
+      };
+    }).filter(Boolean) as MaterialLine[];
   };
 
+  const currentMaterials = calculateMaterialQuantities();
+
   const calculateTotalCost = () => {
-    const materials = calculateMaterialQuantities();
-    const matCost = materials.reduce((acc, item) => {
-      const qty = typeof item.total === 'string' ? parseFloat(item.total) : item.total;
-      return acc + (qty * (prices[item.id] || 0));
-    }, 0);
-    
+    const materials = currentMaterials;
+    const matCost = materials.reduce((acc, item) => acc + item.total, 0);
     const { area } = calculateGeometricData();
     const labor = (area / performance) * (laborPrices.maestro + laborPrices.ayudante);
     return Math.round(matCost + labor);
@@ -247,13 +283,14 @@ export default function Scanner() {
       const formData = new FormData();
       const projectData = {
         elemento: projectNameInput || result.elemento,
-        sistema: result.sistema,
+        sistema: SYSTEMS_CATALOG.find(s => s.id === selectedSystemId)?.name || result.sistema,
         dimensiones: editedDims,
-        materiales: calculateMaterialQuantities(),
+        materiales: currentMaterials,
         totalCost: calculateTotalCost(),
         prices: prices,
         labor_prices: laborPrices,
         performance: performance,
+        selectedSystemId,
         image: historyImageUrl || imagePreview
       };
       
@@ -296,7 +333,7 @@ export default function Scanner() {
     const doc = new jsPDF();
     const total = calculateTotalCost();
     const dims = editedDims;
-    const materials = calculateMaterialQuantities();
+    const materials = currentMaterials;
 
     // Header
     doc.setFillColor(15, 23, 42); // Slate 900
@@ -338,10 +375,9 @@ export default function Scanner() {
     let y = 125;
     materials.forEach((m) => {
       doc.text(m.name, 20, y);
-      doc.text(m.total.toString(), 100, y);
+      doc.text(m.quantity.toString(), 100, y);
       doc.text(m.unit, 150, y);
-      const cost = Math.round(parseFloat(m.total.toString()) * (prices[m.id] || 0));
-      doc.text(`$${cost.toLocaleString('es-CL')}`, 175, y);
+      doc.text(`$${m.total.toLocaleString('es-CL')}`, 175, y);
       y += 8;
     });
 
@@ -442,6 +478,19 @@ export default function Scanner() {
               />
             </div>
 
+            <div className="bg-card border border-border rounded-3xl p-5 shadow-sm space-y-4">
+              <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Sistema Constructivo</label>
+              <select 
+                value={selectedSystemId || ''}
+                onChange={(e) => setSelectedSystemId(e.target.value)}
+                className="w-full bg-secondary/50 border border-border rounded-2xl py-4 px-5 text-sm font-bold focus:ring-2 focus:ring-primary outline-none transition-all appearance-none cursor-pointer"
+              >
+                {SYSTEMS_CATALOG.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="relative h-72 rounded-[32px] overflow-hidden shadow-2xl group border-4 border-white">
               <img src={imagePreview || historyImageUrl || ''} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
@@ -498,22 +547,83 @@ export default function Scanner() {
                     </span>
                   </div>
 
-                  <div className="space-y-3">
-                    {calculateMaterialQuantities().map((item, idx) => {
-                       const itemTotalCost = Math.round(parseFloat(item.total.toString()) * (prices[item.id] || 0));
-                       return (
-                        <div key={idx} className="flex items-center justify-between p-4 bg-secondary/30 rounded-2xl border border-border/10 hover:bg-secondary/50 transition-colors">
+                  <div className="space-y-4">
+                    {currentMaterials.map((item, idx) => (
+                      <div key={idx} className="p-5 bg-secondary/30 rounded-3xl border border-border/10 space-y-4">
+                        <div className="flex items-center justify-between">
                           <div className="space-y-0.5">
                             <p className="text-xs font-black text-foreground">{item.name}</p>
-                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Neto: {item.base} {item.unit}</p>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Neto: {item.baseQuantity} {item.unit}</p>
                           </div>
-                          <div className="text-right space-y-0.5">
-                            <p className="text-sm font-black text-primary">{item.total} {item.unit}</p>
-                            <p className="text-[10px] font-black text-muted-foreground/60">${itemTotalCost.toLocaleString('es-CL')}</p>
+                          <button 
+                            onClick={() => {
+                              const newMats = currentMaterials.filter((_, i) => i !== idx);
+                              setCustomMaterials(newMats);
+                            }}
+                            className="p-2 text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-muted-foreground uppercase px-1">Cantidad</label>
+                            <input 
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const newMats = [...currentMaterials];
+                                newMats[idx] = { ...newMats[idx], quantity: val, total: Math.round(val * newMats[idx].price) };
+                                setCustomMaterials(newMats);
+                              }}
+                              className="w-full bg-background border border-border rounded-xl py-2 px-3 text-xs font-bold focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-muted-foreground uppercase px-1">Precio Unit.</label>
+                            <input 
+                              type="number"
+                              value={item.price}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                const newMats = [...currentMaterials];
+                                newMats[idx] = { ...newMats[idx], price: val, total: Math.round(newMats[idx].quantity * val) };
+                                setCustomMaterials(newMats);
+                              }}
+                              className="w-full bg-background border border-border rounded-xl py-2 px-3 text-xs font-bold focus:ring-1 focus:ring-primary text-right"
+                            />
                           </div>
                         </div>
-                       );
-                    })}
+                        
+                        <div className="pt-2 flex justify-between items-center border-t border-border/10">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase">Subtotal Item</span>
+                          <span className="text-xs font-black text-primary">${item.total.toLocaleString('es-CL')}</span>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <Button 
+                      variant="outline" 
+                      className="w-full rounded-2xl border-dashed border-2 py-6 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary hover:border-primary transition-all group"
+                      onClick={() => {
+                        const mat = MATERIALS_CATALOG.find(m => !currentMaterials.some(cm => cm.id === m.id));
+                        if (mat) {
+                          setCustomMaterials([...currentMaterials, {
+                            id: mat.id,
+                            name: mat.name,
+                            unit: mat.unit,
+                            baseQuantity: 0,
+                            quantity: 1,
+                            price: mat.refPrice,
+                            total: mat.refPrice
+                          }]);
+                        }
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" /> Agregar Insumo
+                    </Button>
                   </div>
 
                   <div className="bg-primary text-white rounded-[32px] p-8 text-center shadow-xl shadow-primary/20 relative overflow-hidden">
