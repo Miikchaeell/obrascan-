@@ -27,8 +27,11 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS
   },
   tls: {
-    rejectUnauthorized: false // Helps with some hosting providers
-  }
+    rejectUnauthorized: false
+  },
+  connectionTimeout: 10000, // 10s
+  greetingTimeout: 10000,   // 10s
+  socketTimeout: 15000      // 15s
 });
 
 // Verify transporter on startup
@@ -232,7 +235,7 @@ const upload = multer({ storage: storage });
 
 // ROUTES
 app.get('/health', (req, res) => res.send('OK'));
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: 'v13-QA-AUDIT' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: 'v14-PLATINUM-FIX' }));
 app.get('/', (req, res) => res.send('ObraGo Backend Stable Live'));
 
 // AUTH

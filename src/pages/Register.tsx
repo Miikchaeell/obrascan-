@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { Mail, Lock, Loader2 } from "lucide-react";
+import { Mail, Lock, Loader2, CheckCircle2 } from "lucide-react";
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -56,8 +56,8 @@ export default function Register() {
           className="max-w-md space-y-6"
         >
           <div className="flex justify-center">
-            <div className="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center">
-              <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
+            <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center">
+              <CheckCircle2 className="w-10 h-10 text-green-500" />
             </div>
           </div>
           <h1 className="text-3xl font-bold">Cuenta en Revisión</h1>
