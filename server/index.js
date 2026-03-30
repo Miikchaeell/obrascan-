@@ -232,7 +232,7 @@ const upload = multer({ storage: storage });
 
 // ROUTES
 app.get('/health', (req, res) => res.send('OK'));
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: 'v11-stable' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: 'v13-QA-AUDIT' }));
 app.get('/', (req, res) => res.send('ObraGo Backend Stable Live'));
 
 // AUTH
