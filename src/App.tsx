@@ -4,6 +4,8 @@ import Scanner from "@/pages/Scanner";
 import History from "@/pages/History";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import Pricing from "@/pages/Pricing";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -20,6 +22,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           
           <Route path="/pricing" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
           <Route path="/scanner" element={<ProtectedRoute><Scanner /></ProtectedRoute>} />

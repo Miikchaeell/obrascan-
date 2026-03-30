@@ -28,25 +28,9 @@ export default function Login() {
       });
 
       const data = await res.json();
-      console.log("LOGIN RESPONSE STATUS:", res.status);
-      console.log("LOGIN RESPONSE BODY:", data);
       
       if (res.ok) {
-        // Solución técnica: Forzar guardado inmediato en LocalStorage
-        console.log("GUARDANDO TOKEN EN LOCALSTORAGE...");
         localStorage.setItem("token", data.token);
-        
-        const savedToken = localStorage.getItem("token");
-        console.log("TOKEN GUARDADO:", savedToken);
-        
-        if (!savedToken) {
-          console.error("CRÍTICO: El token no se persistió en localStorage");
-          setError("Error interno: No se pudo guardar la sesión");
-          return;
-        }
-
-        console.log("POST LOGIN FETCH START");
-        console.log(`POST LOGIN FETCH URL: ${API_URL}/api/auth/me`);
         
         try {
           const meRes = await fetch(`${API_URL}/api/auth/me`, { 
@@ -57,26 +41,30 @@ export default function Login() {
             credentials: "include" 
           });
           
-          console.log("POST LOGIN FETCH STATUS:", meRes.status);
           const meData = await meRes.json();
-          console.log("POST LOGIN FETCH BODY:", meData);
 
-          if (!meRes.ok) {
-            setError(`Error en post-login: ${meData.error || 'No se pudo obtener el perfil'}`);
-            return;
+          if (meRes.ok) {
+            login(data.user, meData.plan);
+            navigate("/");
+          } else {
+            setError(`Error de perfil: ${meData.error || 'No se pudo obtener la sesión'}`);
           }
-
-          login(data.user, meData.plan);
-          navigate("/");
-        } catch (meErr: any) {
-          console.error("POST LOGIN FETCH FAILED:", meErr);
-          setError(`Fallo crítico post-login: ${meErr.message || "Error de red"}`);
+        } catch (meError) {
+          console.error("Me fetch error:", meError);
+          setError("Error al sincronizar sesión");
         }
       } else {
-        setError(data.error || "Error al iniciar sesión");
+        // [v3.0] Handling specific status errors
+        if (data.error === 'TU_CUENTA_AUN_NO_HA_SIDO_APROBADA') {
+          setError("Tu cuenta aún no ha sido aprobada. Recibirás un correo cuando el administrador autorice tu acceso.");
+        } else if (data.error === 'TU_ACCESO_FUE_RECHAZADO') {
+          setError("Tu solicitud de acceso fue rechazada. Contacta a soporte si crees que esto es un error.");
+        } else {
+          setError(data.error || "Credenciales incorrectas o error de servidor");
+        }
       }
     } catch (err) {
-      setError("Error de conexión");
+      setError("Fallo de conexión con el servidor");
     } finally {
       setIsLoading(false);
     }
@@ -131,6 +119,12 @@ export default function Login() {
             {isLoading ? <Loader2 className="animate-spin" /> : "Iniciar Sesión"}
           </Button>
         </form>
+
+        <p className="text-center text-sm text-muted-foreground pt-2">
+          <Link to="/forgot-password" title="Olvidé mi contraseña" className="text-muted-foreground hover:text-primary transition-colors text-xs font-medium">
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </p>
 
         <p className="text-center text-sm text-muted-foreground">
           ¿No tienes cuenta?{" "}

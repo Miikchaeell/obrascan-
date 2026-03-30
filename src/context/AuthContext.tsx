@@ -24,35 +24,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem("token");
-      if (!token) {
+      if (!token || token === "undefined" || token === "null") {
         setIsLoading(false);
+        setUser(null);
         return;
       }
       
       const API_URL = import.meta.env.VITE_API_URL || "";
-      const headers = { 
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
-      };
       const res = await fetch(`${API_URL}/api/auth/me`, {
-        headers,
+        headers: { 
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
         credentials: "include"
       });
-      console.log(`CHECKAUTH FETCH STATUS (${API_URL}/api/auth/me):`, res.status);
       
       if (res.ok) {
         const data = await res.json();
-        console.log("CHECKAUTH FETCH BODY:", data);
         setUser(data.user);
         setPlan(data.plan || 'free');
       } else {
-        const errorData = await res.json().catch(() => ({}));
-        console.warn("CHECKAUTH FETCH FAILED:", res.status, errorData);
+        console.warn("Sesión expirada o inválida");
+        localStorage.removeItem("token");
         setUser(null);
-        setPlan('free');
       }
-    } catch (error: any) {
-      console.error("CHECKAUTH CRITICAL ERROR:", error);
+    } catch (error) {
+      console.error("Error en validación de sesión:", error);
       setUser(null);
     } finally {
       setIsLoading(false);

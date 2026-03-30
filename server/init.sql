@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user', -- 'user', 'admin'
-    is_active BOOLEAN NOT NULL DEFAULT false, -- For private beta approval
+    status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
     stripe_customer_id TEXT UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

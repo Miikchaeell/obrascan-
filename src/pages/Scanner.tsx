@@ -25,16 +25,29 @@ import { jsPDF } from "jspdf";
 import { MATERIALS_CATALOG, SYSTEMS_CATALOG } from "@/constants/catalog";
 
 type AnalysisResult = {
-  elemento: string;
-  sistema: string;
+  partida: string;
+  subtipo: string;
+  sistema_id: string; // ID coincidente con SYSTEMS_CATALOG
   dimensiones: {
     largo: number;
     ancho: number;
     espesor: number;
+    alto: number;
   };
-  materiales: any[];
-  confianza: "alta" | "media" | "baja";
-  observaciones: string;
+  materiales?: any[];
+  confianza: number; // 0.0 a 1.0
+  calidad_analisis?: {
+    iluminacion: string;
+    enfoque: string;
+    advertencia: string;
+  };
+  alternativas?: string[]; // IDs de alternativas
+  recomendacion_cuadrilla?: string;
+  observaciones?: string;
+  
+  // Compatibilidad con v2/v3 (opcional)
+  elemento?: string;
+  sistema?: string;
 };
 
 type MaterialLine = {
@@ -45,6 +58,7 @@ type MaterialLine = {
   quantity: number; // Total con pérdida
   price: number;
   total: number;
+  category: string;
 };
 
 export default function Scanner() {
@@ -63,8 +77,25 @@ export default function Scanner() {
   const [isSaving, setIsSaving] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isValidated, setIsValidated] = useState(false);
-  const [editedDims, setEditedDims] = useState({ largo: 0, ancho: 0, espesor: 0 });
+  const [editedDims, setEditedDims] = useState({ largo: 0, ancho: 0, espesor: 0, alto: 0 });
   const [wastePercent] = useState(10);
+  const [unitMode, setUnitMode] = useState<'m' | 'cm'>('m');
+  
+  // Local string states for fluid input UX (Excel-like)
+  const [localLargo, setLocalLargo] = useState("");
+  const [localAncho, setLocalAncho] = useState("");
+  const [localAlto, setLocalAlto] = useState("");
+  const [localEspesor, setLocalEspesor] = useState("");
+
+  const [showAnalysisGuide, setShowAnalysisGuide] = useState(() => {
+    return localStorage.getItem("skipAnalysisGuide") !== "true";
+  });
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  // Expose guide trigger for the button
+  useEffect(() => {
+    (window as any).showGuideModal = () => setIsGuideOpen(true);
+  }, []);
   
   const [prices, setPrices] = useState<Record<string, number>>({
     "ladrillo": 650,
@@ -102,12 +133,16 @@ export default function Scanner() {
       if (p.profit_percent) setProfitPercent(p.profit_percent);
 
       setResult({
-        elemento: p.elemento || "Proyecto Cargado",
-        sistema: p.sistema || "Estándar",
+        partida: p.partida || p.elemento || "Proyecto Cargado",
+        subtipo: p.subtipo || p.sistema || "Estándar",
+        sistema_id: p.selected_system_id || p.sistema_id || "radier_estandar",
         dimensiones: parsedDims,
         materiales: parsedMats || [],
-        confianza: "alta",
-        observaciones: "Proyecto cargado desde el historial"
+        confianza: 1.0,
+        calidad_analisis: p.calidad_analisis,
+        recomendacion_cuadrilla: p.recomendacion_cuadrilla,
+        elemento: p.elemento,
+        sistema: p.sistema
       });
       
       setEditedDims(parsedDims);
@@ -122,6 +157,32 @@ export default function Scanner() {
       setStep('confirm');
     }
   }, [location.state]);
+
+  const handleFeedback = async (correctedId: string) => {
+    if (!result || !historyImageUrl) return;
+    
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "";
+      const token = localStorage.getItem("token");
+      await fetch(`${API_URL}/api/feedback/correction`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          imageUrl: historyImageUrl,
+          detectedId: result.sistema_id,
+          correctedId: correctedId,
+          confidence: Number(result.confianza)
+        })
+      });
+      console.log("Feedback sent successfully");
+    } catch (err) {
+      console.error("Feedback error:", err);
+    }
+  };
+
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -190,23 +251,25 @@ export default function Scanner() {
         return;
       }
 
-      data = await response.json();
       const backendData = data.data;
       
       const receivedDims = {
         largo: Number(backendData.dimensiones?.largo || 0),
         ancho: Number(backendData.dimensiones?.ancho || 0),
-        espesor: Number(backendData.dimensiones?.espesor || 0)
+        espesor: Number(backendData.dimensiones?.espesor || 0),
+        alto: Number(backendData.dimensiones?.alto || 2.4)
       };
 
       const detectedId = backendData.sistema_id;
       let bestSystem = detectedId || SYSTEMS_CATALOG[0].id;
       
+      // Fallback a lógica antigua de strings si no hay ID exacto
       if (!detectedId) {
-        const detectedElem = (backendData.elemento || "").toLowerCase();
+        const detectedElem = (backendData.partida || backendData.elemento || "").toLowerCase();
         if (detectedElem.includes("muro") || detectedElem.includes("tabique")) bestSystem = "tabique_st";
         if (detectedElem.includes("cielo")) bestSystem = "cielo_falso_st";
         if (detectedElem.includes("radier") || detectedElem.includes("losa")) bestSystem = "radier_estandar";
+        if (detectedElem.includes("cierre") || detectedElem.includes("osb")) bestSystem = "cie_prov_osb";
       }
       
       setSelectedSystemId(bestSystem);
@@ -217,16 +280,33 @@ export default function Scanner() {
       }
       
       setResult({
-        elemento: backendData.elemento || "Estructura Detectada",
-        sistema: backendData.sistema_constructivo || "Sistema Estándar",
+        partida: backendData.partida || "Partida Detectada",
+        subtipo: backendData.subtipo || "Sistema Estándar",
+        sistema_id: bestSystem,
         dimensiones: receivedDims,
-        materiales: backendData.materiales_detectados || [],
-        confianza: backendData.confianza || "alta",
+        confianza: Number(backendData.confianza || 1.0),
+        alternativas: backendData.alternativas || [],
+        calidad_analisis: backendData.calidad_analisis,
+        recomendacion_cuadrilla: backendData.recomendacion_cuadrilla,
         observaciones: backendData.observaciones || ""
       });
       
-      setProjectNameInput(`${backendData.elemento || 'Análisis'} - ${new Date().toLocaleDateString()}`);
-      setEditedDims(receivedDims);
+      const projectName = `${backendData.partida || backendData.elemento || 'Análisis'} - ${new Date().toLocaleDateString()}`;
+      setProjectNameInput(projectName);
+      
+      const dims = {
+        largo: receivedDims.largo || 0,
+        ancho: receivedDims.ancho || 0,
+        alto: receivedDims.alto || 0,
+        espesor: receivedDims.espesor || 0.1
+      };
+
+      setEditedDims(dims);
+      setLocalLargo(dims.largo.toString());
+      setLocalAncho(dims.ancho.toString());
+      setLocalAlto(dims.alto.toString());
+      setLocalEspesor(dims.espesor.toString());
+      
       setHistoryImageUrl(data.imageUrl);
       setStep('confirm');
     } catch (error: any) {
@@ -238,13 +318,50 @@ export default function Scanner() {
     }
   };
 
+  const toggleUnits = () => {
+    const isToCm = unitMode === 'm';
+    const factor = isToCm ? 100 : 0.01;
+    
+    setUnitMode(isToCm ? 'cm' : 'm');
+    
+    // We update local strings to reflect the change visually
+    setLocalLargo(prev => prev ? (parseFloat(prev.replace(',', '.')) * factor).toString() : "");
+    setLocalAncho(prev => prev ? (parseFloat(prev.replace(',', '.')) * factor).toString() : "");
+    setLocalAlto(prev => prev ? (parseFloat(prev.replace(',', '.')) * factor).toString() : "");
+    setLocalEspesor(prev => prev ? (parseFloat(prev.replace(',', '.')) * factor).toString() : "");
+  };
+
+  const handleLocalInputChange = (dim: 'largo' | 'ancho' | 'alto' | 'espesor', val: string) => {
+    // Normalizar coma a punto para cálculo
+    const normalized = val.replace(',', '.');
+    const numeric = parseFloat(normalized) || 0;
+    
+    // El valor interno SIEMPRE es en metros
+    const valueInMeters = unitMode === 'cm' ? numeric / 100 : numeric;
+    
+    setEditedDims(prev => ({ ...prev, [dim]: valueInMeters }));
+    
+    if (dim === 'largo') setLocalLargo(val);
+    if (dim === 'ancho') setLocalAncho(val);
+    if (dim === 'alto') setLocalAlto(val);
+    if (dim === 'espesor') setLocalEspesor(val);
+  };
+
   const calculateGeometricData = () => {
-    // IMPORTANTE: Usar editedDims para que la UI sea reactiva al cambio manual
-    const { largo, ancho, espesor } = editedDims;
-    const area = largo * ancho;
+    const { largo, ancho, espesor, alto } = editedDims;
+    const sys = SYSTEMS_CATALOG.find(s => s.id === selectedSystemId);
+    
+    let area = 0;
+    if (sys?.id === "tabique_st" || sys?.category === "Cierros Provisorios") {
+      area = largo * alto; // Para cierros y tabiques, el área es vertical
+    } else {
+      area = largo * ancho;
+    }
+    
     const volume = area * espesor;
     const elem = (result?.elemento || "").toLowerCase();
-    const showVolume = elem.includes("muro") || elem.includes("radier") || elem.includes("losa") || elem.includes("columna") || elem.includes("viga");
+    const showVolume = elem.includes("radier") || elem.includes("losa") || elem.includes("viga");
+
     return { area, volume, showVolume };
   };
 
@@ -274,7 +391,8 @@ export default function Scanner() {
         baseQuantity: baseQty,
         quantity: totalQty,
         price: price,
-        total: Math.round(totalQty * price)
+        total: Math.round(totalQty * price),
+        category: mat.category
       };
     }).filter(Boolean) as MaterialLine[];
   };
@@ -383,90 +501,134 @@ export default function Scanner() {
 
     // Header
     doc.setFillColor(15, 23, 42); // Slate 900
-    doc.rect(0, 0, 210, 40, 'F');
+    doc.rect(0, 0, 210, 45, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
+    doc.setFontSize(24);
     doc.setFont("helvetica", "bold");
-    doc.text("ObraGo", 15, 20);
-    doc.setFontSize(10);
-    doc.text("REPORTE DE ANÁLISIS DE PRECIO UNITARIO (APU)", 15, 30);
-    doc.text(new Date().toLocaleDateString(), 180, 20);
+    doc.text("ObraGo v2.0", 15, 22);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("SOFTWARE DE PRESUPUESTACIÓN E INTELIGENCIA ARTIFICIAL", 15, 32);
+    doc.text(new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString(), 160, 22);
 
-    // Metadata
+    // Metadata & Quality
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(14);
-    doc.text(`PROYECTO: ${projectNameInput || 'Sin Nombre'}`, 15, 55);
-    doc.setFontSize(11);
-    doc.text(`Elemento: ${result.elemento}`, 15, 65);
-    doc.text(`Sistema: ${SYSTEMS_CATALOG.find(s => s.id === selectedSystemId)?.name || result.sistema}`, 15, 72);
+    doc.setFont("helvetica", "bold");
+    doc.text(`PROYECTO: ${projectNameInput || 'Sin Nombre'}`, 15, 60);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Sistema Detectado: ${SYSTEMS_CATALOG.find(s => s.id === selectedSystemId)?.name || result.sistema}`, 15, 68);
+    
+    if (result.calidad_analisis?.advertencia) {
+      doc.setTextColor(185, 28, 28); // Red 700
+      doc.setFontSize(8);
+      doc.text(`AVISO DE CALIDAD: ${result.calidad_analisis.advertencia}`, 15, 74);
+      doc.setTextColor(0, 0, 0);
+    }
 
     // Dimensions
-    doc.setDrawColor(226, 232, 240); // Slate 200
-    doc.line(15, 80, 195, 80);
-    doc.setFontSize(10);
-    doc.text("DIMENSIONES (m)", 15, 90);
-    doc.text(`Largo: ${dims.largo}m    |    Ancho: ${dims.ancho}m    |    Espesor: ${dims.espesor}m`, 15, 100);
-
-    // Materials Table Header
-    doc.setFillColor(248, 250, 252); // Slate 50
-    doc.rect(15, 110, 180, 8, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.line(15, 82, 195, 82);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("Insumo / Material", 20, 116);
-    doc.text("Cantidad", 100, 116);
-    doc.text("Unid.", 140, 116);
-    doc.text("Costo Neto", 170, 116);
-
-    // Table Content
+    doc.text("DIMENSIONES TÉCNICAS", 15, 90);
     doc.setFont("helvetica", "normal");
-    let y = 125;
-    materials.forEach((m) => {
+    doc.text(`Largo: ${dims.largo}m    |    Ancho: ${dims.ancho}m    |    Espesor: ${dims.espesor}m    |    Superficie: ${(dims.largo * dims.ancho).toFixed(2)}m2`, 15, 98);
+
+    // Execution Dashboard
+    doc.setFillColor(240, 253, 244); // Emerald 50
+    doc.rect(15, 105, 180, 15, 'F');
+    doc.setTextColor(21, 128, 61); // Emerald 700
+    doc.setFont("helvetica", "bold");
+    doc.text("MÉTRICAS DE EJECUCIÓN", 20, 112);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Plazo: ${calculateEstimatedTime()} Días    |    Cuadrilla: ${SYSTEMS_CATALOG.find(s => s.id === selectedSystemId)?.squad || "Maestro + Ayudante"}`, 80, 112);
+    doc.setTextColor(0, 0, 0);
+
+    // Materials Table - PRINCIPALES
+    doc.setFillColor(248, 250, 252);
+    doc.rect(15, 125, 180, 8, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.text("MATERIALES PRINCIPALES", 20, 131);
+    doc.text("Cant.", 100, 131);
+    doc.text("Precio", 135, 131);
+    doc.text("Subtotal", 170, 131);
+
+    // Table Content Principal
+    doc.setFont("helvetica", "normal");
+    let y = 140;
+    const principal = materials.filter(m => ["Planchas", "Perfiles", "Hormigones", "Aislación"].includes(m.category));
+    principal.forEach((m) => {
       doc.text(m.name, 20, y);
       doc.text(m.quantity.toString(), 100, y);
-      doc.text(m.unit, 140, y);
+      doc.text(`$${m.price.toLocaleString('es-CL')}`, 135, y);
       doc.text(`$${m.total.toLocaleString('es-CL')}`, 170, y);
-      y += 8;
+      y += 7;
+    });
+
+    // Materials Table - INSUMOS
+    y += 5;
+    doc.setFillColor(255, 251, 235); // Amber 50
+    doc.rect(15, y, 180, 8, 'F');
+    doc.setTextColor(180, 83, 9); // Amber 700
+    doc.setFont("helvetica", "bold");
+    doc.text("INSUMOS / FIJACIONES / CONSUMIBLES", 20, y + 6);
+    doc.setTextColor(0, 0, 0);
+
+    y += 14;
+    doc.setFont("helvetica", "normal");
+    const insumos = materials.filter(m => ["Fijaciones", "Otros"].includes(m.category));
+    insumos.forEach((m) => {
+      doc.text(m.name, 20, y);
+      doc.text(m.quantity.toString(), 100, y);
+      doc.text(`$${m.price.toLocaleString('es-CL')}`, 135, y);
+      doc.text(`$${m.total.toLocaleString('es-CL')}`, 170, y);
+      y += 7;
     });
 
     // Labor
-    y += 10;
+    y += 5;
+    doc.line(15, y, 195, y);
+    y += 8;
     doc.setFont("helvetica", "bold");
-    doc.text("MANO DE OBRA", 20, y);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Tarifa: $${(customLaborRate || 0).toLocaleString('es-CL')} x un`, 100, y);
+    doc.text("MANO DE OBRA ESPECIALIZADA", 20, y);
+    doc.setFontSize(8);
+    doc.text(`(Plazo: ${calculateEstimatedTime()} días | Cuadrilla: ${SYSTEMS_CATALOG.find(s => s.id === selectedSystemId)?.squad || "Personal"})`, 85, y);
+    doc.setFontSize(10);
     doc.text(`$${laborCost.toLocaleString('es-CL')}`, 170, y);
     
     // Summary APU Block
     y += 15;
-    doc.setFillColor(241, 245, 249); // Slate 100
-    doc.rect(15, y, 180, 45, 'F');
-    doc.setFont("helvetica", "bold");
-    doc.text("RESUMEN DE COSTOS (APU)", 20, y + 8);
-    doc.setFont("helvetica", "normal");
-    doc.text("SUBTOTAL COSTO DIRECTO:", 20, y + 16);
-    doc.text(`$${costoDirecto.toLocaleString('es-CL')}`, 170, y + 16);
-    doc.text(`GASTOS GENERALES (${ggPercent}%):`, 20, y + 24);
-    doc.text(`+ $${ggAmount.toLocaleString('es-CL')}`, 170, y + 24);
-    doc.text(`UTILIDAD (${profitPercent}%):`, 20, y + 32);
-    doc.text(`+ $${profitAmount.toLocaleString('es-CL')}`, 170, y + 32);
+    if (y > 230) { doc.addPage(); y = 20; }
+    doc.setFillColor(15, 23, 42); 
+    doc.rect(120, y, 75, 45, 'F');
+    doc.setTextColor(255, 255, 255);
     
-    // Subtotal components reference for lint fix
-    console.log(`Exporting PDF with Material Cost: ${matCost}`); 
+    doc.setFontSize(8);
+    doc.text("COSTO DIRECTO:", 125, y + 10);
+    doc.text(`$${costoDirecto.toLocaleString('es-CL')}`, 188, y + 10, { align: "right" });
+    
+    doc.text(`GASTOS GENERALES (${ggPercent}%):`, 125, y + 18);
+    doc.text(`+ $${ggAmount.toLocaleString('es-CL')}`, 188, y + 18, { align: "right" });
+    
+    doc.text(`UTILIDAD (${profitPercent}%):`, 125, y + 26);
+    doc.text(`+ $${profitAmount.toLocaleString('es-CL')}`, 188, y + 26, { align: "right" });
 
-    // Total
-    y += 40;
-    doc.setFontSize(16);
+    // Internal reference for total materials
+    console.log("Material Cost for report:", matCost);
+    doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text("TOTAL VENTA NETO:", 20, y + 5);
-    doc.setTextColor(37, 99, 235);
-    doc.text(`$${total.toLocaleString('es-CL')} CLP`, 130, y + 5);
+    doc.text("TOTAL VENTA:", 125, y + 38);
+    doc.setTextColor(59, 130, 246);
+    doc.text(`$${total.toLocaleString('es-CL')}`, 188, y + 38, { align: "right" });
 
     // Footer
-    doc.setTextColor(148, 163, 184); // Slate 400
-    doc.setFontSize(8);
-    doc.text(`Ejecución Estimada: ${calculateEstimatedTime()} días hábiles.`, 15, 275);
-    doc.text("Generado automáticamente por ObraGo AI. Este reporte es referencial para presupuestos de obra.", 15, 282);
+    doc.setTextColor(148, 163, 184);
+    doc.setFontSize(7);
+    doc.text("ObraGo AI | Reporte de presupuestación generado automáticamente. Los valores son referenciales.", 15, 285);
 
-    doc.save(`APU_ObraGo_${projectNameInput.replace(/\s/g, '_')}.pdf`);
+    doc.save(`Presupuesto_ObraGo_v2_${projectNameInput.replace(/\s/g, '_')}.pdf`);
   };
 
   return (
@@ -493,8 +655,17 @@ export default function Scanner() {
               <Camera className="w-12 h-12 text-primary" />
             </div>
             <div className="space-y-4">
-              <h2 className="text-2xl font-black tracking-tight">Cubicación Inteligente</h2>
-              <p className="text-muted-foreground text-sm max-w-xs mx-auto">Sube una foto de la estructura y la IA calculará por ti.</p>
+              <h2 className="text-2xl font-black tracking-tight">Cubicación Inteligente v2.0</h2>
+              <p className="text-muted-foreground text-sm max-w-xs mx-auto">Sube una foto de la estructura y la IA generará un presupuesto profesional completo.</p>
+            </div>
+            
+            {/* PRUEBA DE CALIDAD IA - ADVERTENCIA PREVIA */}
+            <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex items-start gap-3 text-left max-w-sm mx-auto">
+              <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] font-bold text-amber-800 leading-relaxed">
+                <span className="block mb-1 text-sm font-black uppercase tracking-widest">Recomendación Pro</span>
+                Captura la estructura de frente, con buena luz y sin obstrucciones para una precisión del 99%.
+              </p>
             </div>
             
             {imagePreview ? (
@@ -505,7 +676,14 @@ export default function Scanner() {
                 </div>
                 <Button 
                   size="lg" 
-                  onClick={handleAnalyze}
+                  onClick={() => {
+                    if (showAnalysisGuide) {
+                      // Trigger Guide Modal instead of direct analysis if it's the first time
+                      (window as any).showGuideModal();
+                    } else {
+                      handleAnalyze();
+                    }
+                  }}
                   disabled={isAnalyzing}
                   className="w-full h-16 rounded-2xl text-lg font-bold bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 gap-3"
                 >
@@ -539,6 +717,49 @@ export default function Scanner() {
 
         {result && step === 'confirm' && (
           <div className="p-5 space-y-6">
+            {/* QUALITY WARNING BANNER */}
+            {/* [v4.0] DESAMBIGUACIÓN / AVISO DE CONFIANZA */}
+            {result && (result.confianza < 0.8 || (result.alternativas && result.alternativas.length > 0)) && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-amber-500/10 border border-amber-500/20 rounded-[32px] p-6 space-y-4"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-amber-500 rounded-2xl shadow-lg shadow-amber-500/20">
+                    <Sparkles className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-1">Verificación Requerida</p>
+                    <p className="text-sm font-bold text-foreground">La IA detectó ambigüedad. Selecciona la partida más precisa:</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {result.alternativas?.map(altId => {
+                    const altSys = SYSTEMS_CATALOG.find(s => s.id === altId);
+                    if (!altSys) return null;
+                    return (
+                      <Button
+                        key={altId}
+                        variant={selectedSystemId === altId ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedSystemId(altId)}
+                        className={`rounded-xl text-[10px] font-black uppercase tracking-wider h-auto py-2 px-3 ${selectedSystemId === altId ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'border-amber-500/30 text-amber-700 hover:bg-amber-500/10'}`}
+                      >
+                        {altSys.name}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                {result.calidad_analisis?.advertencia && (
+                  <p className="text-[10px] font-bold text-amber-700 italic bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">
+                    Nota IA: {result.calidad_analisis.advertencia}
+                  </p>
+                )}
+              </motion.div>
+            )}
             <div className="bg-card border border-border rounded-3xl p-5 shadow-sm space-y-4">
               <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Nombre del Proyecto</label>
               <input 
@@ -551,14 +772,36 @@ export default function Scanner() {
             </div>
 
             <div className="bg-card border border-border rounded-3xl p-5 shadow-sm space-y-4">
-              <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest px-1">Sistema Constructivo</label>
+              <div className="flex items-center justify-between px-1">
+                <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Partida de Obra</label>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-auto py-0 text-[9px] font-bold text-primary hover:bg-transparent"
+                  onClick={() => setIsGuideOpen(true)}
+                >
+                  ¿No es la correcta?
+                </Button>
+              </div>
               <select 
                 value={selectedSystemId || ''}
-                onChange={(e) => setSelectedSystemId(e.target.value)}
+                onChange={(e) => {
+                  const newId = e.target.value;
+                  const oldId = selectedSystemId;
+                  setSelectedSystemId(newId);
+                  // [v4.0] Trigger feedback loop if user changes it manually after AI detection
+                  if (result && oldId && oldId !== newId) {
+                    handleFeedback(newId);
+                  }
+                }}
                 className="w-full bg-secondary/50 border border-border rounded-2xl py-4 px-5 text-sm font-bold focus:ring-2 focus:ring-primary outline-none transition-all appearance-none cursor-pointer"
               >
-                {SYSTEMS_CATALOG.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                {Array.from(new Set(SYSTEMS_CATALOG.map(s => s.category))).map(cat => (
+                  <optgroup key={cat} label={cat}>
+                    {SYSTEMS_CATALOG.filter(s => s.category === cat).map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>
@@ -568,13 +811,13 @@ export default function Scanner() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
               <div className="absolute bottom-6 left-6 text-white space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest bg-primary px-3 py-1 rounded-full shadow-lg">IA Detectado</span>
-                  <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg ${result.confianza === 'alta' ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-                    Confianza {result.confianza}
+                  <span className="text-[10px] font-black uppercase tracking-widest bg-primary px-3 py-1 rounded-full shadow-lg text-white">IA Detectado</span>
+                  <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg text-white ${Number(result.confianza) >= 0.8 ? 'bg-emerald-500' : Number(result.confianza) >= 0.5 ? 'bg-amber-500' : 'bg-destructive'}`}>
+                    Confianza {(Number(result.confianza) * 100).toFixed(0)}%
                   </span>
                 </div>
-                <h3 className="text-2xl font-black tracking-tight">{result.elemento}</h3>
-                <p className="text-xs font-bold text-white/70 italic">{result.sistema}</p>
+                <h3 className="text-2xl font-black tracking-tight">{result.partida || result.elemento}</h3>
+                <p className="text-xs font-bold text-white/70 italic">{result.subtipo || result.sistema}</p>
               </div>
             </div>
 
@@ -583,30 +826,101 @@ export default function Scanner() {
                 <h4 className="font-black text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                   <Maximize className="w-4 h-4" /> Dimensiones
                 </h4>
+                <div className="flex bg-secondary/50 p-1 rounded-xl ring-1 ring-border">
+                  <button 
+                    onClick={() => unitMode !== 'm' && toggleUnits()}
+                    className={`px-3 py-1 text-[10px] font-black uppercase rounded-lg transition-all ${unitMode === 'm' ? 'bg-primary text-white shadow-md' : 'text-muted-foreground'}`}
+                  >
+                    Metros
+                  </button>
+                  <button 
+                    onClick={() => unitMode !== 'cm' && toggleUnits()}
+                    className={`px-3 py-1 text-[10px] font-black uppercase rounded-lg transition-all ${unitMode === 'cm' ? 'bg-primary text-white shadow-md' : 'text-muted-foreground'}`}
+                  >
+                    cm
+                  </button>
+                </div>
                 <Button variant="ghost" size="sm" onClick={() => setIsValidated(!isValidated)} className="text-primary text-xs font-bold">
                   {isValidated ? "Editar" : "Confirmar"}
                 </Button>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                {(['largo', 'ancho', 'espesor'] as const).map((dim) => (
-                  <div key={dim} className="space-y-1">
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase px-1">{dim}</label>
+              <div className="grid grid-cols-2 gap-4">
+                {/* LARGO - SIEMPRE VISIBLE */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-muted-foreground uppercase px-1">Largo ({unitMode})</label>
+                  <input 
+                    type="text"
+                    inputMode="decimal"
+                    value={localLargo}
+                    onChange={(e) => handleLocalInputChange('largo', e.target.value)}
+                    placeholder="0.00"
+                    disabled={isValidated}
+                    className="w-full bg-secondary/50 border border-border rounded-xl py-4 px-4 text-sm font-black focus:ring-2 focus:ring-primary outline-none transition-all text-center disabled:opacity-50"
+                  />
+                </div>
+
+                {/* ANCHO - SOLO CIELO / RADIER */}
+                {selectedSystemId !== 'tabique_st' && (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-muted-foreground uppercase px-1">Ancho ({unitMode})</label>
                     <input 
-                      type="number"
-                      step="0.01"
-                      disabled={isValidated}
-                      value={editedDims[dim] === 0 ? '' : editedDims[dim]}
+                      type="text"
+                      inputMode="decimal"
+                      value={localAncho}
+                      onChange={(e) => handleLocalInputChange('ancho', e.target.value)}
                       placeholder="0.00"
-                      onChange={(e) => {
-                        const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                        setEditedDims(prev => ({ ...prev, [dim]: val }));
-                      }}
-                      className="w-full bg-secondary border border-border rounded-xl py-3 px-2 text-center font-bold focus:ring-2 focus:ring-primary outline-none disabled:opacity-50 transition-all"
+                      disabled={isValidated}
+                      className="w-full bg-secondary/50 border border-border rounded-xl py-4 px-4 text-sm font-black focus:ring-2 focus:ring-primary outline-none transition-all text-center disabled:opacity-50"
                     />
                   </div>
-                ))}
+                )}
+
+                {/* ALTO - SOLO TABIQUE */}
+                {selectedSystemId === 'tabique_st' && (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-muted-foreground uppercase px-1">Alto ({unitMode})</label>
+                    <input 
+                      type="text"
+                      inputMode="decimal"
+                      value={localAlto}
+                      onChange={(e) => handleLocalInputChange('alto', e.target.value)}
+                      placeholder="0.00"
+                      disabled={isValidated}
+                      className="w-full bg-secondary/50 border border-border rounded-xl py-4 px-4 text-sm font-black focus:ring-2 focus:ring-primary outline-none transition-all text-center disabled:opacity-50"
+                    />
+                  </div>
+                )}
+
+                {/* ESPESOR - SOLO RADIER */}
+                {selectedSystemId === 'radier_estandar' && (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-muted-foreground uppercase px-1">Espesor ({unitMode})</label>
+                    <input 
+                      type="text"
+                      inputMode="decimal"
+                      value={localEspesor}
+                      onChange={(e) => handleLocalInputChange('espesor', e.target.value)}
+                      placeholder="0.00"
+                      disabled={isValidated}
+                      className="w-full bg-secondary/50 border border-border rounded-xl py-4 px-4 text-sm font-black focus:ring-2 focus:ring-primary outline-none transition-all text-center disabled:opacity-50"
+                    />
+                  </div>
+                )}
               </div>
+
+              {/* AUTOMATIC METRICS DASHBOARD (v2.0+) */}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="bg-primary/5 p-4 rounded-[28px] border border-primary/10">
+                  <p className="text-[9px] font-black text-primary/60 uppercase tracking-widest leading-none mb-1">Superficie</p>
+                  <p className="text-lg font-black text-primary tracking-tight">{calculateGeometricData().area.toFixed(2)} m²</p>
+                </div>
+                <div className="bg-secondary/30 p-4 rounded-[28px] border border-border/10">
+                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Mano de Obra</p>
+                  <p className="text-lg font-black text-foreground tracking-tight">${calculateLaborCost().toLocaleString('es-CL')}</p>
+                </div>
+              </div>
+            </div>
 
               {isValidated && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-6 space-y-6 border-t border-border/50">
@@ -619,62 +933,138 @@ export default function Scanner() {
                     </span>
                   </div>
 
-                  <div className="space-y-4">
-                    {currentMaterials.map((item, idx) => (
-                      <div key={idx} className="p-5 bg-secondary/30 rounded-3xl border border-border/10 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-black text-foreground">{item.name}</p>
-                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">Neto: {item.baseQuantity} {item.unit}</p>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              const newMats = currentMaterials.filter((_, i) => i !== idx);
-                              setCustomMaterials(newMats);
-                            }}
-                            className="p-2 text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                    <div className="space-y-3">
+                    <div className="space-y-6">
+                      {/* SECTION 1: MATERIALES PRINCIPALES */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="w-1 h-4 bg-primary rounded-full" />
+                          <h5 className="text-[10px] font-black uppercase tracking-widest text-foreground">Materiales Principales</h5>
                         </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-muted-foreground uppercase px-1">Cantidad</label>
-                            <input 
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                const newMats = [...currentMaterials];
-                                newMats[idx] = { ...newMats[idx], quantity: val, total: Math.round(val * newMats[idx].price) };
-                                setCustomMaterials(newMats);
-                              }}
-                              className="w-full bg-background border border-border rounded-xl py-2 px-3 text-xs font-bold focus:ring-1 focus:ring-primary"
-                            />
+                        {currentMaterials.filter(m => ["Planchas", "Perfiles", "Hormigones", "Aislación"].includes(m.category)).map((item, idx) => (
+                          <div key={`m-${idx}`} className="p-4 bg-secondary/20 rounded-2xl border border-border/5 group hover:border-primary/20 transition-all flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <p className="text-[11px] font-black text-foreground uppercase tracking-tight">{item.name}</p>
+                                <p className="text-[9px] text-muted-foreground font-bold italic">Rend: {item.baseQuantity} {item.unit}/un</p>
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  const newMats = currentMaterials.filter(cm => cm.id !== item.id);
+                                  setCustomMaterials(newMats);
+                                }}
+                                className="p-2 text-destructive/40 hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all"
+                                title="Eliminar ítem"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            
+                            <div className="grid grid-cols-12 gap-2 items-end">
+                              <div className="col-span-4 space-y-1">
+                                <label className="text-[8px] font-black text-muted-foreground uppercase px-1">Cantidad</label>
+                                <input 
+                                  type="number"
+                                  value={item.quantity}
+                                  title={`Cantidad para ${item.name}`}
+                                  placeholder="0.00"
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    const newMats = currentMaterials.map(cm => cm.id === item.id ? { ...cm, quantity: val, total: Math.round(val * cm.price) } : cm);
+                                    setCustomMaterials(newMats);
+                                  }}
+                                  className="w-full bg-background/50 border-none rounded-lg py-1.5 px-2 text-[11px] font-black focus:ring-1 focus:ring-primary transition-all text-center"
+                                />
+                              </div>
+                              <div className="col-span-4 space-y-1">
+                                <label className="text-[8px] font-black text-muted-foreground uppercase px-1">Precio Un.</label>
+                                <input 
+                                  type="number"
+                                  value={item.price}
+                                  title={`Precio unitario para ${item.name}`}
+                                  placeholder="0"
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 0;
+                                    const newMats = currentMaterials.map(cm => cm.id === item.id ? { ...cm, price: val, total: Math.round(cm.quantity * val) } : cm);
+                                    setCustomMaterials(newMats);
+                                  }}
+                                  className="w-full bg-background/50 border-none rounded-lg py-1.5 px-2 text-[11px] font-black focus:ring-1 focus:ring-primary transition-all text-right"
+                                />
+                              </div>
+                              <div className="col-span-4 text-right pb-1.5">
+                                <p className="text-[8px] font-black text-muted-foreground uppercase leading-none mb-1">Subtotal</p>
+                                <p className="text-[11px] font-black text-primary leading-none">${item.total.toLocaleString('es-CL')}</p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-muted-foreground uppercase px-1">Precio Unit.</label>
-                            <input 
-                              type="number"
-                              value={item.price}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value) || 0;
-                                const newMats = [...currentMaterials];
-                                newMats[idx] = { ...newMats[idx], price: val, total: Math.round(newMats[idx].quantity * val) };
-                                setCustomMaterials(newMats);
-                              }}
-                              className="w-full bg-background border border-border rounded-xl py-2 px-3 text-xs font-bold focus:ring-1 focus:ring-primary text-right"
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="pt-2 flex justify-between items-center border-t border-border/10">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase">Subtotal Item</span>
-                          <span className="text-xs font-black text-primary">${item.total.toLocaleString('es-CL')}</span>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+
+                      {/* SECTION 2: INSUMOS Y FIJACIONES (EXPERT DETAIL) */}
+                      <div className="space-y-3 pt-4">
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="w-1 h-4 bg-amber-500 rounded-full" />
+                          <h5 className="text-[10px] font-black uppercase tracking-widest text-foreground">Insumos y Fijaciones <span className="ml-2 text-[8px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Nivel Experto</span></h5>
+                        </div>
+                        {currentMaterials.filter(m => ["Fijaciones", "Otros"].includes(m.category)).map((item, idx) => (
+                          <div key={`i-${idx}`} className="p-4 bg-amber-500/5 rounded-2xl border border-amber-500/10 group hover:border-amber-500/30 transition-all flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <p className="text-[11px] font-black text-foreground uppercase tracking-tight">{item.name}</p>
+                                <p className="text-[9px] text-muted-foreground font-bold italic">Consumo Est.: {item.baseQuantity} {item.unit}/un</p>
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  const newMats = currentMaterials.filter(cm => cm.id !== item.id);
+                                  setCustomMaterials(newMats);
+                                }}
+                                className="p-2 text-destructive/40 hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all"
+                                title="Eliminar ítem"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            
+                            <div className="grid grid-cols-12 gap-2 items-end">
+                              <div className="col-span-4 space-y-1">
+                                <label className="text-[8px] font-black text-muted-foreground uppercase px-1">Cantidad</label>
+                                <input 
+                                  type="number"
+                                  value={item.quantity}
+                                  title={`Cantidad para ${item.name}`}
+                                  placeholder="0.00"
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    const newMats = currentMaterials.map(cm => cm.id === item.id ? { ...cm, quantity: val, total: Math.round(val * cm.price) } : cm);
+                                    setCustomMaterials(newMats);
+                                  }}
+                                  className="w-full bg-background/50 border-none rounded-lg py-1.5 px-2 text-[11px] font-black focus:ring-1 focus:ring-amber-500 transition-all text-center"
+                                />
+                              </div>
+                              <div className="col-span-4 space-y-1">
+                                <label className="text-[8px] font-black text-muted-foreground uppercase px-1">Precio Un.</label>
+                                <input 
+                                  type="number"
+                                  value={item.price}
+                                  title={`Precio unitario para ${item.name}`}
+                                  placeholder="0"
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 0;
+                                    const newMats = currentMaterials.map(cm => cm.id === item.id ? { ...cm, price: val, total: Math.round(cm.quantity * val) } : cm);
+                                    setCustomMaterials(newMats);
+                                  }}
+                                  className="w-full bg-background/50 border-none rounded-lg py-1.5 px-2 text-[11px] font-black focus:ring-1 focus:ring-amber-500 transition-all text-right"
+                                />
+                              </div>
+                              <div className="col-span-4 text-right pb-1.5">
+                                <p className="text-[8px] font-black text-muted-foreground uppercase leading-none mb-1">Subtotal</p>
+                                <p className="text-[11px] font-black text-amber-600 leading-none">${item.total.toLocaleString('es-CL')}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                     
                     <Button 
                       variant="outline" 
@@ -689,7 +1079,8 @@ export default function Scanner() {
                             baseQuantity: 0,
                             quantity: 1,
                             price: mat.refPrice,
-                            total: mat.refPrice
+                            total: mat.refPrice,
+                            category: mat.category
                           }]);
                         }
                       }}
@@ -725,19 +1116,31 @@ export default function Scanner() {
                         </div>
                       </div>
                       
-                      {/* ESTIMATED TIME indicator */}
-                      <div className="flex items-center justify-between px-5 py-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-600">
-                             <Clock className="w-4 h-4 text-emerald-600" />
+                      {/* ESTIMATED TIME & SQUAD indicator (PRODUCT v2.0) */}
+                      <div className="flex flex-col gap-3 p-5 bg-emerald-500/10 border border-emerald-500/20 rounded-3xl">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-600">
+                               <Clock className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div className="space-y-0.5">
+                              <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-none">Plazo Estimado</p>
+                              <p className="text-sm font-black text-emerald-700">{calculateEstimatedTime()} Días Hábiles</p>
+                            </div>
                           </div>
-                          <div className="space-y-0.5">
-                            <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Ejecución Estimada</p>
-                            <p className="text-xs font-bold text-emerald-600">{calculateEstimatedTime()} jornada(s) hábil(es)</p>
+                          <div className="text-right">
+                             <span className="text-[9px] font-black text-emerald-700/50 uppercase tracking-tighter">Rend: {performance} un/día</span>
                           </div>
                         </div>
-                        <div className="text-right">
-                           <span className="text-[9px] font-black text-emerald-700/50 uppercase">Rend: {performance} un/día</span>
+                        
+                        <div className="flex items-center gap-3 pt-3 border-t border-emerald-500/10">
+                          <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-600">
+                             <Users className="w-5 h-5 text-emerald-600" />
+                          </div>
+                          <div className="space-y-0.5">
+                            <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-none">Cuadrilla Recomendada</p>
+                            <p className="text-sm font-black text-emerald-700">{SYSTEMS_CATALOG.find(s => s.id === selectedSystemId)?.squad || result.recomendacion_cuadrilla || "Maestro + Ayudante"}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -818,7 +1221,6 @@ export default function Scanner() {
                   </div>
                 </motion.div>
               )}
-            </div>
           </div>
         )}
       </main>
@@ -859,6 +1261,70 @@ export default function Scanner() {
                 <Button variant="ghost" onClick={() => setShowUpgradeModal(false)} className="w-full h-12 rounded-2xl font-bold text-muted-foreground">
                   Quizás más tarde
                 </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isGuideOpen && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsGuideOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+            <motion.div 
+              initial={{ y: "100%", opacity: 0 }} 
+              animate={{ y: 0, opacity: 1 }} 
+              exit={{ y: "100%", opacity: 0 }}
+              className="bg-card w-full max-w-lg rounded-[48px] p-10 relative z-10 shadow-2xl border border-border overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-32 -mt-32 blur-3xl" />
+              
+              <div className="relative z-10 space-y-8">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <h3 className="text-3xl font-black tracking-tight">Guía de Análisis Pro</h3>
+                    <p className="text-muted-foreground font-bold">Consigue presupuestos con 99% de precisión</p>
+                  </div>
+                  <X className="w-6 h-6 text-muted-foreground cursor-pointer" onClick={() => setIsGuideOpen(false)} />
+                </div>
+
+                <div className="grid gap-6">
+                  {[
+                    { icon: <Maximize className="w-5 h-5" />, title: "Imagen Frontal", desc: "Evita ángulos extremos. Captura la estructura de frente." },
+                    { icon: <Sparkles className="w-5 h-5" />, title: "Buena Iluminación", desc: "Asegúrate de que no haya sombras densas sobre la obra." },
+                    { icon: <Camera className="w-5 h-5" />, title: "Foco Nítido", desc: "La IA necesita ver las texturas de los materiales claramente." }
+                  ].map((item, i) => (
+                    <div key={i} className="flex gap-4 p-4 bg-secondary/30 rounded-3xl border border-border/10">
+                      <div className="p-3 bg-primary/10 rounded-2xl text-primary h-fit">{item.icon}</div>
+                      <div className="space-y-0.5">
+                        <p className="font-black text-sm">{item.title}</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-4 pt-4">
+                  <Button 
+                    onClick={() => {
+                      setIsGuideOpen(false);
+                      handleAnalyze();
+                    }} 
+                    className="w-full h-16 rounded-[24px] font-black text-lg bg-primary hover:bg-primary/90 shadow-xl shadow-primary/30 gap-2"
+                  >
+                    Iniciar Análisis <Sparkles className="w-5 h-5" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => {
+                      localStorage.setItem("skipAnalysisGuide", "true");
+                      setShowAnalysisGuide(false);
+                      setIsGuideOpen(false);
+                      handleAnalyze();
+                    }} 
+                    className="w-full text-muted-foreground font-bold text-xs uppercase tracking-widest"
+                  >
+                    Entendido, no mostrar nuevamente
+                  </Button>
+                </div>
               </div>
             </motion.div>
           </div>
