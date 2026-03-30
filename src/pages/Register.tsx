@@ -23,6 +23,9 @@ export default function Register() {
     setIsLoading(true);
     setError("");
 
+    // [v4.0.2] Ensure no previous session leaks into registration
+    localStorage.removeItem("token");
+
     try {
       const API_URL = import.meta.env.VITE_API_URL || "";
       const res = await fetch(`${API_URL}/api/auth/register`, {

@@ -18,6 +18,9 @@ export default function Login() {
     setIsLoading(true);
     setError("");
 
+    // [v4.0.2] Ensure no previous session leaks into login attempt
+    localStorage.removeItem("token");
+
     try {
       const API_URL = import.meta.env.VITE_API_URL || "";
       const res = await fetch(`${API_URL}/api/auth/login`, {
@@ -120,15 +123,18 @@ export default function Login() {
           </Button>
         </form>
 
-        <p className="text-center text-sm text-muted-foreground pt-2">
-          <Link to="/forgot-password" title="Olvidé mi contraseña" className="text-muted-foreground hover:text-primary transition-colors text-xs font-medium">
+        <div className="text-center pt-2">
+          <Link 
+            to="/forgot-password" 
+            className="text-primary hover:text-primary/80 transition-colors text-sm font-semibold"
+          >
             ¿Olvidaste tu contraseña?
           </Link>
-        </p>
+        </div>
 
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-muted-foreground pt-4 border-t border-border/50">
           ¿No tienes cuenta?{" "}
-          <Link to="/register" className="text-primary font-bold hover:underline">
+          <Link to="/register" className="text-primary font-black hover:underline underline-offset-4">
             Regístrate aquí
           </Link>
         </p>
