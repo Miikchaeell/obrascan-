@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Mail, Lock, Loader2 } from "lucide-react";
@@ -9,9 +9,8 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
+   const [isRegistered, setIsRegistered] = useState(false);
+   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +40,7 @@ export default function Register() {
         const data = await res.json();
         setError(data.error || "Error al registrarse");
       }
-    } catch (err) {
+    } catch {
       setError("Error de conexión");
     } finally {
       setIsLoading(false);

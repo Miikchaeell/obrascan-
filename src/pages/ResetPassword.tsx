@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Lock, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
@@ -12,7 +12,6 @@ export default function ResetPassword() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState("");
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (!token) {
@@ -48,7 +47,7 @@ export default function ResetPassword() {
         const data = await res.json();
         setError(data.error || "No se pudo restablecer la contraseña");
       }
-    } catch (err) {
+    } catch {
       setError("Error de conexión");
     } finally {
       setIsLoading(false);
