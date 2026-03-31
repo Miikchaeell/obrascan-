@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { Mail, Lock, Loader2, CheckCircle2 } from "lucide-react";
+import { Mail, Lock, Loader2 } from "lucide-react";
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -48,31 +48,38 @@ export default function Register() {
   };
 
   if (isRegistered) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-display text-center">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md space-y-6"
-        >
-          <div className="flex justify-center">
-            <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center">
-              <CheckCircle2 className="w-10 h-10 text-green-500" />
+    try {
+      return (
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-display text-center">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="max-w-md space-y-6"
+          >
+            <div className="flex justify-center">
+              <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center">
+                <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+                </svg>
+              </div>
             </div>
-          </div>
-          <h1 className="text-3xl font-bold">Cuenta en Revisión</h1>
-          <p className="text-muted-foreground text-lg">
-            ¡Registro exitoso! Tu solicitud de acceso ha sido enviada al administrador.
-          </p>
-          <div className="bg-muted p-4 rounded-xl text-sm border border-border">
-            Recibirás un correo de confirmación una vez que tu cuenta sea aprobada para la beta privada de ObraGo.
-          </div>
-          <Button asChild className="w-full h-12 rounded-xl text-lg font-bold bg-primary shadow-lg shadow-primary/20">
-            <Link to="/login">Entendido, Volver al Login</Link>
-          </Button>
-        </motion.div>
-      </div>
-    );
+            <h1 className="text-3xl font-bold">Cuenta en Revisión</h1>
+            <p className="text-muted-foreground text-lg">
+              ¡Registro exitoso! Tu solicitud de acceso ha sido enviada al administrador.
+            </p>
+            <div className="bg-muted p-4 rounded-xl text-sm border border-border">
+              Recibirás un correo de confirmación una vez que tu cuenta sea aprobada para la beta privada de ObraGo.
+            </div>
+            <Button asChild className="w-full h-12 rounded-xl text-lg font-bold bg-primary shadow-lg shadow-primary/20">
+              <Link to="/login">Entendido, Volver al Login</Link>
+            </Button>
+          </motion.div>
+        </div>
+      );
+    } catch (err) {
+      console.error("Critical Render Error in Register Success View:", err);
+      return <div className="p-10 text-center">Registro exitoso. Por favor <Link to="/login" className="text-primary underline">vuelve al login</Link>.</div>;
+    }
   }
 
   return (

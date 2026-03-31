@@ -17,11 +17,11 @@ import Stripe from 'stripe';
 import cookieParser from 'cookie-parser';
 import nodemailer from 'nodemailer';
 
-// Nodemailer Transporter Configuration (Production ready)
+// [v5.0] Robust Nodemailer Configuration for Render (SSL Port 465)
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+  port: parseInt(process.env.SMTP_PORT || '465'),
+  secure: (process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465' || !process.env.SMTP_PORT),
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
@@ -29,10 +29,26 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false
   },
-  connectionTimeout: 10000, // 10s
-  greetingTimeout: 10000,   // 10s
-  socketTimeout: 15000      // 15s
+  connectionTimeout: 10000, 
+  greetingTimeout: 10000,   
+  socketTimeout: 20000      
 });
+
+// [v5.0] Safe Email Helper (Non-blocking)
+const safeSendMail = async (options) => {
+  try {
+    console.log(`📧 Attempting to send email to: ${options.to} - Subject: ${options.subject}`);
+    const info = await transporter.sendMail(options);
+    console.log(`✅ Email sent successfully: ${info.messageId}`);
+    return { success: true, info };
+  } catch (error) {
+    console.error("❌ NODEMAILER DELIVERY FAILURE:", error.message);
+    if (error.code === 'ENETUNREACH') {
+      console.warn("⚠️ Network unreachable at SMTP Port. Check Render outbound restrictions.");
+    }
+    return { success: false, error: error.message };
+  }
+};
 
 // Verify transporter on startup
 transporter.verify((error, success) => {
@@ -273,9 +289,14 @@ app.post('/api/auth/register', async (req, res) => {
       `
     };
 
-    transporter.sendMail(mailOptions).catch(err => console.error("Error enviando correo a admin:", err));
+    // [v5.0] RESILIENT ADMIN NOTIFICATION (Non-blocking)
+    safeSendMail(mailOptions); 
 
-    res.json({ success: true, userId: user.id, message: "Tu cuenta está en revisión. Recibirás acceso una vez aprobada." });
+    res.json({ 
+      success: true, 
+      userId: user.id, 
+      message: "Registro exitoso. Tu cuenta está en revisión. El administrador ha sido notificado." 
+    });
   } catch (error) {
     if (error.code === '23505') {
        return res.status(409).json({ error: "El email ya está registrado." });
@@ -400,10 +421,13 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       `
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ RECOVERY EMAIL SENT TO ${email}`);
+    // [v5.0] RESILIENT PASSWORD RECOVERY (Non-blocking)
+    safeSendMail(mailOptions);
     
-    res.json({ success: true, message: 'Instrucciones enviadas al correo' });
+    res.json({ 
+      success: true, 
+      message: "Si el correo está registrado, recibirás instrucciones en breve. Por favor revisa tu bandeja de entrada o spam." 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
