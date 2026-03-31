@@ -9,8 +9,10 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-   const [isRegistered, setIsRegistered] = useState(false);
-   const [error, setError] = useState("");
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [error, setError] = useState("");
+
+  console.log("[Register] STATE:", { isRegistered, isLoading, hasError: !!error });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,38 +50,34 @@ export default function Register() {
   };
 
   if (isRegistered) {
-    try {
-      return (
-        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-display text-center">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="max-w-md space-y-6"
+    console.log("[Register] Rendering Success View");
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center" style={{ backgroundColor: '#0a0a0a', color: 'white' }}>
+        <div className="max-w-md space-y-6">
+          <div className="flex justify-center">
+            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center border border-green-500/50">
+              <svg className="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+              </svg>
+            </div>
+          </div>
+          <h1 className="text-4xl font-bold text-white">Cuenta en Revisión</h1>
+          <p className="text-gray-400 text-lg">
+            ¡Registro recibido! Tu solicitud de acceso está siendo procesada por el equipo de ObraGo.
+          </p>
+          <div className="bg-white/5 p-6 rounded-2xl text-sm border border-white/10 text-gray-300">
+            Recibirás una notificación por email cuando tu acceso a la beta privada sea aprobado.
+          </div>
+          <a 
+            href="/login" 
+            className="inline-block w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-lg font-bold transition-all shadow-xl"
+            style={{ textDecoration: 'none' }}
           >
-            <div className="flex justify-center">
-              <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center">
-                <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
-                </svg>
-              </div>
-            </div>
-            <h1 className="text-3xl font-bold">Cuenta en Revisión</h1>
-            <p className="text-muted-foreground text-lg">
-              ¡Registro exitoso! Tu solicitud de acceso ha sido enviada al administrador.
-            </p>
-            <div className="bg-muted p-4 rounded-xl text-sm border border-border">
-              Recibirás un correo de confirmación una vez que tu cuenta sea aprobada para la beta privada de ObraGo.
-            </div>
-            <Button asChild className="w-full h-12 rounded-xl text-lg font-bold bg-primary shadow-lg shadow-primary/20">
-              <Link to="/login">Entendido, Volver al Login</Link>
-            </Button>
-          </motion.div>
+            Volver al Inicio de Sesión
+          </a>
         </div>
-      );
-    } catch (err) {
-      console.error("Critical Render Error in Register Success View:", err);
-      return <div className="p-10 text-center">Registro exitoso. Por favor <Link to="/login" className="text-primary underline">vuelve al login</Link>.</div>;
-    }
+      </div>
+    );
   }
 
   return (
