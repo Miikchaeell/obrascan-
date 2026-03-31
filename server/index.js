@@ -251,7 +251,7 @@ const upload = multer({ storage: storage });
 
 // ROUTES
 app.get('/health', (req, res) => res.send('OK'));
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: 'v14-PLATINUM-FIX' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: 'v15-STABLE-SMTP' }));
 app.get('/', (req, res) => res.send('ObraGo Backend Stable Live'));
 
 // AUTH
